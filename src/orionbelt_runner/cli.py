@@ -50,10 +50,18 @@ def run(
         for name, err in result.errors.items():
             typer.echo(f"  {name}: {err}", err=True)
         typer.echo(f"\n{len(result.errors)} query/queries failed", err=True)
+        # The runlog is most useful exactly here — print its path before exiting
+        # so the operator can read it without hunting for the file.
+        if result.runlog_path:
+            typer.echo(f"Run log written: {result.runlog_path}", err=True)
         sys.exit(1)
 
     if result.report_path:
         typer.echo(f"Report written: {result.report_path}")
+    if result.exports_dir:
+        typer.echo(f"Exports written: {result.exports_dir}")
+    if result.runlog_path:
+        typer.echo(f"Run log written: {result.runlog_path}")
 
 
 @app.command()

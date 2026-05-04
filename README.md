@@ -6,13 +6,13 @@ A run is a YAML document combining:
 
 - An **OBSL endpoint** (base URL, optional auth, optional locale/timezone, optional model to load)
 - A list of **named queries** — any valid OBML query body
-- A **report config** — markdown output with sections bound to queries
+- A **report config** — markdown or HTML output with sections bound to queries
 
-Numeric and timestamp cells are pre-rendered server-side using each column's `format` pattern from the OBML model (the runner sends `format_values=true` on every query), so reports show e.g. `1.853.429,67` for `locale: de` without any client-side formatting. See [`examples/monthly-revenue-sample.md`](examples/monthly-revenue-sample.md) for what a rendered report looks like.
+Numeric and timestamp cells are pre-rendered server-side using each column's `format` pattern from the OBML model (the runner sends `format_values=true` on every query), so reports show e.g. `1.853.429,67` for `locale: de` without any client-side formatting. See [`examples/monthly-revenue-2026-04-29.md`](examples/monthly-revenue-2026-04-29.md) (markdown) and [`examples/monthly-revenue-2026-04-29.html`](examples/monthly-revenue-2026-04-29.html) (HTML) for sample outputs.
 
 ## Status
 
-Early scaffold (v0.1.0). Markdown reports only. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
+Early scaffold (v0.2.0). Markdown and HTML reports, with optional per-query TSV exports and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
 
 ## Install
 
@@ -88,11 +88,24 @@ report:
 
 | `render` | Output |
 |---|---|
-| `table` | Markdown table of all rows |
+| `table` | Table of all rows |
 | `value` | Single bold value (first numeric column of first row by default) |
 | `list`  | Bullet list of one column |
 
-**Path placeholders** in `report.output`, `report.title`, `report.intro`: `{name}`, `{date}`, `{datetime}`.
+**Path placeholders** are accepted in `report.output`, `report.title`, `report.intro`, and `report.footer`. The instant comes from OBSL's `GET /v1/settings` (server clock + effective TZ); falls back to the runner's UTC clock when settings is unreachable.
+
+| Placeholder | Example | Notes |
+|---|---|---|
+| `{name}` | `Monthly Revenue` | the spec name |
+| `{date}` | `2026-04-29` | YYYY-MM-DD in the resolved TZ |
+| `{datetime}` | `2026-04-29T18-02-06Z` | filesystem-safe; trailing `Z` only when TZ is UTC |
+| `{time}` | `18:02:06` | colons are unsafe on Windows paths — use `{time_filename}` |
+| `{time_filename}` | `18_02_06` | filesystem-safe |
+| `{tz}` | `Europe/Berlin` | IANA name |
+| `{tz_filename}` / `{timezone}` | `Europe, Berlin` | `/` replaced with `, ` for path safety |
+| `{runner_version}` | `0.2.0` | the OrionBelt Runner version that produced this report |
+
+`report.footer` additionally accepts result-derived counters: `{number_of_queries}`, `{number_of_sections}`, `{number_of_rows}` (camelCase aliases — `{numberOfQueries}` etc. — also work).
 
 ### Queries from a folder
 
@@ -107,6 +120,54 @@ queries:                      # optional, runs after dir queries in spec order
 
 Each file is a full `QuerySpec` (`name`, `dialect`, `query`, optional `description`). When `name:` is omitted the filename stem is used verbatim — `total-revenue.yaml` → `total-revenue`. Duplicate names across the dir + inline list raise an error at load time. Paths resolve relative to the spec file.
 
+## Outputs
+
+A run produces up to three artefacts in the report directory:
+
+```
+reports/monthly-revenue-2026-04-29.md           ← report
+reports/monthly-revenue-2026-04-29.run.yaml     ← run log (always)
+reports/monthly-revenue-2026-04-29_exports/     ← TSV exports (opt-in)
+  ├── total_revenue.tsv
+  ├── revenue_by_nation.tsv
+  └── top_orders_raw.tsv
+```
+
+### Report — markdown or HTML
+
+`format: markdown` (default) writes a `.md`. `format: html` writes a self-contained HTML5 document with inline default CSS and a light/dark theme — no external assets, so the file works when emailed, opened from disk, or served from a static host. The output extension follows the template you set in `output:`.
+
+```yaml
+report:
+  format: html
+  output: reports/{name}-{date}.html
+  title: "Monthly Revenue — {date}"
+```
+
+See [`examples/monthly-revenue-2026-04-29.html`](examples/monthly-revenue-2026-04-29.html) for a rendered HTML sample.
+
+### Run log (YAML sidecar) — always written
+
+Always emitted next to the report at `<report-stem>.run.yaml`, even when queries fail (when it's most useful). Captures, for each query: the compiled SQL as a literal block scalar, the OBSL `explain` plan (planner + reasons + joins + CFL legs), the `resolved` info (fact tables / dimensions / measures), wall-clock and server-side timing, warnings, and any errors. The file header records the spec name, OBSL `version` / `api_version`, session/model IDs, and the report path.
+
+YAML so it's both human-skimmable and trivially machine-parseable in one step. Useful for debugging, audit trails, and downstream tooling that wants the SQL or the plan.
+
+See [`examples/monthly-revenue-2026-04-29.run.yaml`](examples/monthly-revenue-2026-04-29.run.yaml).
+
+### Per-query TSV exports — opt-in
+
+Set `report.export_results: true` to write each query's rows as TSV into a sibling `<report-stem>_exports/` directory:
+
+```yaml
+report:
+  output: reports/{name}-{date}.md
+  export_results: true
+```
+
+One file per query, named after the query and sanitised to safe path chars. TSV uses `\t` separator and `\n` line endings; cells with embedded tabs / newlines / quotes are quoted (compatible with `pandas.read_csv(..., sep='\t')`). Cells reflect the same `format_values=true` data the report shows. Exports are only written on a fully successful run.
+
+See [`examples/monthly-revenue-2026-04-29_exports/`](examples/monthly-revenue-2026-04-29_exports/).
+
 ## Architecture
 
 The runner talks to OBSL through a small `ObslClient` Protocol. One implementation today (HTTP). Tests can drop in a fake; an in-process implementation can be added later without touching the runner, report, or CLI code.
@@ -114,7 +175,9 @@ The runner talks to OBSL through a small `ObslClient` Protocol. One implementati
 ```
 spec.yaml ──▶ load_spec ──▶ Runner ──▶ ObslClient ──▶ OBSL (HTTP)
                               │
-                              └─▶ render_markdown ──▶ report.md
+                              ├─▶ render_markdown / render_html ──▶ report.md|html
+                              ├─▶ render_runlog                 ──▶ report.run.yaml
+                              └─▶ render_tsv (× N)              ──▶ report_exports/*.tsv
 ```
 
 ## License

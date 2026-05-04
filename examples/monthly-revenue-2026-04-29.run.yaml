@@ -1,0 +1,156 @@
+spec: Monthly Revenue
+description: Top-line numbers for the monthly business review. Loads its own TPC-H model into the OBSL session — works against any OBSL deployment with QUERY_EXECUTE=true and a connection serving the TPC-H tables.
+runner_version: 0.2.0
+started_at: '2026-04-29T18:02:03.142000+00:00'
+finished_at: '2026-04-29T18:02:06.220000+00:00'
+duration_ms: 3078.0
+report_path: reports/monthly-revenue-2026-04-29.md
+obsl:
+  base_url: http://localhost:8080
+  version: 2.1.0
+  api_version: v1
+  session_id: sess-7f3a1c
+  model_id: model-tpch
+  locale: de
+  timezone:
+errors: {}
+queries:
+  - name: total_revenue
+    dialect: postgres
+    started_at: '2026-04-29T18:02:03.322000+00:00'
+    duration_ms: 412.7
+    row_count: 1
+    server_time_ms: 388.4
+    timezone: Europe/Berlin
+    sql_valid: true
+    warnings: []
+    sql: |-
+      SELECT SUM("lineitem"."l_extendedprice" * (1 - "lineitem"."l_discount")) AS "Revenue"
+      FROM "lineitem"
+    resolved:
+      fact_tables:
+        - lineitem
+      dimensions: []
+      measures:
+        - Revenue
+    explain:
+      planner: DefaultPlanner
+      planner_reason: single fact table, no dimensions
+      base_object: lineitem
+      base_object_reason: only fact in select
+      where_filter_count: 0
+      having_filter_count: 0
+      has_totals: false
+      joins: []
+      cfl_legs: []
+  - name: revenue_by_nation
+    dialect: postgres
+    started_at: '2026-04-29T18:02:03.762000+00:00'
+    duration_ms: 1284.1
+    row_count: 20
+    server_time_ms: 1234.8
+    timezone: Europe/Berlin
+    sql_valid: true
+    warnings: []
+    sql: |-
+      SELECT
+          "nation"."n_name" AS "Nation",
+          SUM("lineitem"."l_extendedprice" * (1 - "lineitem"."l_discount")) AS "Revenue"
+      FROM "lineitem"
+      JOIN "orders"   ON "lineitem"."l_orderkey"  = "orders"."o_orderkey"
+      JOIN "customer" ON "orders"."o_custkey"     = "customer"."c_custkey"
+      JOIN "nation"   ON "customer"."c_nationkey" = "nation"."n_nationkey"
+      GROUP BY "nation"."n_name"
+      ORDER BY "Revenue" DESC
+      LIMIT 20
+    resolved:
+      fact_tables:
+        - lineitem
+      dimensions:
+        - Nation
+      measures:
+        - Revenue
+    explain:
+      planner: DefaultPlanner
+      planner_reason: single fact with dimension projection
+      base_object: lineitem
+      base_object_reason: fact carrying the Revenue measure
+      where_filter_count: 0
+      having_filter_count: 0
+      has_totals: false
+      joins:
+        - from: lineitem
+          to: orders
+          columns:
+            - l_orderkey
+            - o_orderkey
+          reason: reach customer via orders
+        - from: orders
+          to: customer
+          columns:
+            - o_custkey
+            - c_custkey
+          reason: reach nation via customer
+        - from: customer
+          to: nation
+          columns:
+            - c_nationkey
+            - n_nationkey
+          reason: dimension Nation lives on nation table
+      cfl_legs:
+        - measure_source: lineitem
+          common_root: nation
+          reason: single-leg path lineitem->orders->customer->nation
+          measures:
+            - Revenue
+          joins:
+            - lineitem->orders
+            - orders->customer
+            - customer->nation
+  - name: top_orders_raw
+    dialect: postgres
+    started_at: '2026-04-29T18:02:05.052000+00:00'
+    duration_ms: 1163.5
+    row_count: 50
+    server_time_ms: 1118.0
+    timezone: Europe/Berlin
+    sql_valid: true
+    warnings:
+      - 'raw mode: format_values applies to numeric cells only'
+    sql: |-
+      SELECT
+          "customer"."c_name"     AS "Customers.Customer Name",
+          "nation"."n_name"       AS "Nations.Nation Name",
+          "orders"."o_orderkey"   AS "Orders.Order Key",
+          "orders"."o_totalprice" AS "Orders.Order Total"
+      FROM "orders"
+      JOIN "customer" ON "orders"."o_custkey"     = "customer"."c_custkey"
+      JOIN "nation"   ON "customer"."c_nationkey" = "nation"."n_nationkey"
+      ORDER BY "orders"."o_totalprice" DESC
+      LIMIT 50
+    resolved:
+      fact_tables: []
+      dimensions: []
+      measures: []
+    explain:
+      planner: RawPlanner
+      planner_reason: select.fields requested → raw mode (no measures)
+      base_object: orders
+      base_object_reason: primary fact in field list
+      where_filter_count: 0
+      having_filter_count: 0
+      has_totals: false
+      joins:
+        - from: orders
+          to: customer
+          columns:
+            - o_custkey
+            - c_custkey
+          reason: Customer Name lives on customer
+        - from: customer
+          to: nation
+          columns:
+            - c_nationkey
+            - n_nationkey
+          reason: Nation Name lives on nation
+      cfl_legs: []

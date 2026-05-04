@@ -13,6 +13,8 @@ from typing import Any, Protocol
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from orionbelt_runner import __version__
+
 
 class ColumnMetadata(BaseModel):
     """Per-column metadata returned by OBSL alongside rows."""
@@ -22,6 +24,59 @@ class ColumnMetadata(BaseModel):
     name: str
     type: str = "string"  # "string" | "number" | "datetime" | "binary"
     format: str | None = None
+
+
+class ResolvedInfo(BaseModel):
+    """Mirrors OBSL's ResolvedInfoResponse — what was resolved during compilation."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    fact_tables: list[str] = Field(default_factory=list)
+    dimensions: list[str] = Field(default_factory=list)
+    measures: list[str] = Field(default_factory=list)
+
+
+class ExplainJoin(BaseModel):
+    """Explanation of a single join step (mirrors OBSL ExplainJoinResponse)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    from_object: str
+    to_object: str
+    join_columns: list[str] = Field(default_factory=list)
+    reason: str
+
+
+class ExplainCflLeg(BaseModel):
+    """Explanation of a single CFL leg (mirrors OBSL ExplainCflLegResponse)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    measure_source: str
+    common_root: str
+    reason: str
+    measures: list[str] = Field(default_factory=list)
+    joins: list[str] = Field(default_factory=list)
+
+
+class ExplainPlan(BaseModel):
+    """Full query plan explanation (mirrors OBSL ExplainPlanResponse).
+
+    Captured into the run log alongside the compiled SQL so a reader can
+    see *why* OBSL picked a given plan, not just *what* it ran.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    planner: str
+    planner_reason: str
+    base_object: str
+    base_object_reason: str
+    joins: list[ExplainJoin] = Field(default_factory=list)
+    where_filter_count: int = 0
+    having_filter_count: int = 0
+    has_totals: bool = False
+    cfl_legs: list[ExplainCflLeg] = Field(default_factory=list)
 
 
 class ExecuteResult(BaseModel):
@@ -34,7 +89,12 @@ class ExecuteResult(BaseModel):
     columns: list[ColumnMetadata] = Field(default_factory=list)
     rows: list[list[Any]] = Field(default_factory=list)
     row_count: int = 0
+    execution_time_ms: float = 0.0
+    timezone: str | None = None
     warnings: list[str] = Field(default_factory=list)
+    sql_valid: bool = True
+    resolved: ResolvedInfo = Field(default_factory=ResolvedInfo)
+    explain: ExplainPlan | None = None
 
     @field_validator("columns", mode="before")
     @classmethod
@@ -48,10 +108,14 @@ class ExecuteResult(BaseModel):
 class CompileResult(BaseModel):
     """SQL + metadata returned from POST /v1/query/sql (or shortcut)."""
 
+    model_config = ConfigDict(extra="ignore")
+
     sql: str
     dialect: str
     warnings: list[str] = Field(default_factory=list)
     sql_valid: bool = True
+    resolved: ResolvedInfo = Field(default_factory=ResolvedInfo)
+    explain: ExplainPlan | None = None
 
 
 class SessionInfo(BaseModel):
@@ -155,7 +219,7 @@ class HttpObslClient:
         timeout_seconds: float = 30.0,
     ) -> None:
         self._base_url = base_url.rstrip("/")
-        headers: dict[str, str] = {"User-Agent": "orionbelt-runner/0.1"}
+        headers: dict[str, str] = {"User-Agent": f"orionbelt-runner/{__version__}"}
         if api_token:
             headers["Authorization"] = f"Bearer {api_token}"
         self._client = httpx.Client(

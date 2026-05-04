@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,8 +11,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
 
+from orionbelt_runner import __version__
 from orionbelt_runner.client import ExecuteResult, ObslClient
-from orionbelt_runner.report import render_markdown
+from orionbelt_runner.exports import render_tsv, safe_export_filename
+from orionbelt_runner.report import render_html, render_markdown
+from orionbelt_runner.runlog import ObslMeta, QueryLogEntry, RunLog, render_runlog
 from orionbelt_runner.spec import ModelSpec, QuerySpec, ReportSection, RunSpec
 
 log = structlog.get_logger("orionbelt_runner")
@@ -26,6 +30,8 @@ class RunResult:
     finished_at: datetime
     results: dict[str, ExecuteResult] = field(default_factory=dict)
     report_path: Path | None = None
+    runlog_path: Path | None = None
+    exports_dir: Path | None = None
     errors: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -41,40 +47,71 @@ class Runner:
 
     def run(self, spec: RunSpec, *, output_dir: Path | None = None) -> RunResult:
         started_at = datetime.now(tz=UTC)
-        log.info("run_start", spec=spec.name, query_count=len(spec.queries))
+        log.info(
+            "run_start",
+            spec=spec.name,
+            runner_version=__version__,
+            query_count=len(spec.queries),
+        )
 
         session_id: str | None = None
         model_id: str | None = spec.obsl.model_id
         results: dict[str, ExecuteResult] = {}
         errors: dict[str, str] = {}
+        query_entries: list[QueryLogEntry] = []
         report_basis: datetime = started_at
         tz_name = "UTC"
+        settings_payload: dict[str, Any] = {}
 
         try:
             if spec.obsl.model is not None:
                 session_id, model_id = self._load_session_model(spec.obsl.model)
 
-            report_basis, tz_name = self._resolve_report_clock(
+            report_basis, tz_name, settings_payload = self._resolve_report_clock(
                 session_id=session_id, model_id=model_id, fallback=started_at
             )
 
             self._preflight_format_patterns(spec.queries, session_id=session_id, model_id=model_id)
 
             for q in spec.queries:
+                q_started = datetime.now(tz=UTC)
+                t0 = time.monotonic_ns()
+                dialect = q.dialect or "postgres"
                 try:
-                    results[q.name] = self._client.execute(
+                    result = self._client.execute(
                         q.query,
-                        dialect=q.dialect or "postgres",
+                        dialect=dialect,
                         model_id=model_id,
                         session_id=session_id,
                         format_values=True,
                         locale=spec.obsl.locale,
                         timezone=spec.obsl.timezone,
                     )
-                    log.info("query_done", name=q.name, rows=len(results[q.name].rows))
+                    duration_ms = (time.monotonic_ns() - t0) / 1e6
+                    results[q.name] = result
+                    query_entries.append(
+                        QueryLogEntry(
+                            name=q.name,
+                            dialect=dialect,
+                            started_at=q_started,
+                            duration_ms=duration_ms,
+                            result=result,
+                        )
+                    )
+                    log.info("query_done", name=q.name, rows=len(result.rows))
                 except Exception as exc:  # noqa: BLE001 — surface anything the client raises
+                    duration_ms = (time.monotonic_ns() - t0) / 1e6
                     msg = f"{type(exc).__name__}: {exc}"
                     errors[q.name] = msg
+                    query_entries.append(
+                        QueryLogEntry(
+                            name=q.name,
+                            dialect=dialect,
+                            started_at=q_started,
+                            duration_ms=duration_ms,
+                            error=msg,
+                        )
+                    )
                     log.error("query_failed", name=q.name, error=msg)
         finally:
             if session_id is not None:
@@ -87,11 +124,37 @@ class Runner:
         finished_at = datetime.now(tz=UTC)
 
         report_path: Path | None = None
+        exports_dir: Path | None = None
         if results and not errors:
             report_path = self._render_report(
                 spec, results, report_basis, output_dir, tz_name=tz_name
             )
             log.info("report_written", path=str(report_path))
+            if spec.report.export_results:
+                exports_dir = self._write_exports(results, report_path)
+                if exports_dir is not None:
+                    log.info(
+                        "exports_written",
+                        dir=str(exports_dir),
+                        files=len(results),
+                    )
+
+        runlog_path = self._write_runlog(
+            spec=spec,
+            started_at=started_at,
+            finished_at=finished_at,
+            report_basis=report_basis,
+            tz_name=tz_name,
+            output_dir=output_dir,
+            session_id=session_id,
+            model_id=model_id,
+            settings_payload=settings_payload,
+            query_entries=query_entries,
+            errors=errors,
+            report_path=report_path,
+        )
+        if runlog_path is not None:
+            log.info("runlog_written", path=str(runlog_path))
 
         return RunResult(
             spec_name=spec.name,
@@ -99,6 +162,8 @@ class Runner:
             finished_at=finished_at,
             results=results,
             report_path=report_path,
+            runlog_path=runlog_path,
+            exports_dir=exports_dir,
             errors=errors,
         )
 
@@ -188,8 +253,8 @@ class Runner:
         session_id: str | None,
         model_id: str | None,
         fallback: datetime,
-    ) -> tuple[datetime, str]:
-        """Ask OBSL for the report's timestamp basis and IANA TZ.
+    ) -> tuple[datetime, str, dict[str, Any]]:
+        """Ask OBSL for the report's timestamp basis, IANA TZ, and full payload.
 
         Calls ``GET /v1/settings`` and reads the ``timezone`` block:
 
@@ -202,6 +267,10 @@ class Runner:
         on a different host or with clock drift would otherwise label its
         own wall clock with the database's TZ, which is misleading.
 
+        Returns the full settings dict alongside the resolved clock so
+        callers (e.g. the run-log writer) can pull ``version`` /
+        ``api_version`` from the same call without a second round trip.
+
         Falls back to ``fallback`` (the runner's clock) and UTC on any
         failure or when the response doesn't carry the relevant fields.
         """
@@ -209,7 +278,7 @@ class Runner:
             payload = self._client.settings(session_id=session_id, model_id=model_id)
         except Exception as exc:  # noqa: BLE001
             log.warning("settings_lookup_failed", error=f"{type(exc).__name__}: {exc}")
-            return fallback, "UTC"
+            return fallback, "UTC", {}
 
         tz_name = "UTC"
         instant: datetime | None = None
@@ -237,7 +306,7 @@ class Runner:
                     instant = instant.replace(tzinfo=UTC)
                 break
 
-        return instant if instant is not None else fallback, tz_name
+        return instant if instant is not None else fallback, tz_name, payload
 
     def _render_report(
         self,
@@ -248,38 +317,161 @@ class Runner:
         *,
         tz_name: str = "UTC",
     ) -> Path:
-        try:
-            tz = ZoneInfo(tz_name)
-        except ZoneInfoNotFoundError:
-            log.warning("unknown_timezone", tz=tz_name, fallback="UTC")
-            tz_name = "UTC"
-            tz = ZoneInfo("UTC")
-        local_dt = started_at.astimezone(tz)
-        is_utc = tz_name.upper() == "UTC"
-        datetime_str = local_dt.strftime("%Y-%m-%dT%H-%M-%S") + ("Z" if is_utc else "")
-        tz_filename = tz_name.replace("/", ", ")
-        ctx = {
-            "name": spec.name,
-            "date": local_dt.strftime("%Y-%m-%d"),
-            "datetime": datetime_str,
-            "time": local_dt.strftime("%H:%M:%S"),
-            "time_filename": local_dt.strftime("%H_%M_%S"),
-            "tz": tz_name,
-            "tz_filename": tz_filename,
-            "timezone": tz_filename,  # alias of tz_filename — friendlier name
-        }
+        ctx = _build_template_context(spec.name, started_at, tz_name)
         report_spec = spec.report
         if not report_spec.sections:
             auto = _auto_sections(spec.queries)
             if auto:
                 report_spec = report_spec.model_copy(update={"sections": auto})
-        body = render_markdown(report_spec, results, context=ctx)
-        out_path = Path(spec.report.output.format(**ctx))
-        if output_dir is not None and not out_path.is_absolute():
-            out_path = output_dir / out_path
+        if report_spec.format == "html":
+            body = render_html(report_spec, results, context=ctx)
+        else:
+            body = render_markdown(report_spec, results, context=ctx)
+        out_path = _resolve_output_path(spec.report.output, ctx, output_dir)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(body, encoding="utf-8")
         return out_path
+
+    def _write_exports(
+        self,
+        results: dict[str, ExecuteResult],
+        report_path: Path,
+    ) -> Path | None:
+        """Write each query's rows as TSV under ``<report-stem>_exports/``.
+
+        One file per query, named after the query (sanitised to safe path
+        chars). Returns the exports directory path on success, ``None`` if
+        the write failed — exports are a convenience artefact, never fatal.
+        """
+        exports_dir = report_path.with_name(f"{report_path.stem}_exports")
+        try:
+            exports_dir.mkdir(parents=True, exist_ok=True)
+            for name, result in results.items():
+                file_path = exports_dir / safe_export_filename(name)
+                file_path.write_text(render_tsv(result), encoding="utf-8")
+            return exports_dir
+        except Exception as exc:  # noqa: BLE001 — never let exports mask the real run
+            log.warning("exports_write_failed", error=f"{type(exc).__name__}: {exc}")
+            return None
+
+    def _write_runlog(
+        self,
+        *,
+        spec: RunSpec,
+        started_at: datetime,
+        finished_at: datetime,
+        report_basis: datetime,
+        tz_name: str,
+        output_dir: Path | None,
+        session_id: str | None,
+        model_id: str | None,
+        settings_payload: dict[str, Any],
+        query_entries: list[QueryLogEntry],
+        errors: dict[str, str],
+        report_path: Path | None,
+    ) -> Path | None:
+        """Write the YAML run log sidecar.
+
+        Always attempted, even when queries failed — that's exactly when
+        the log is most useful. Path mirrors the report path stem with
+        ``.md`` swapped to ``.run.yaml`` (or appended when the spec uses
+        a non-markdown output template).
+
+        Failure to write is logged but not fatal: the runner has already
+        produced everything else it can.
+        """
+        try:
+            ctx = _build_template_context(spec.name, report_basis, tz_name)
+            report_template_path = _resolve_output_path(
+                spec.report.output, ctx, output_dir
+            )
+            runlog_path = _runlog_path_from_report(report_template_path)
+
+            run_log = RunLog(
+                spec=spec.name,
+                description=spec.description,
+                started_at=started_at,
+                finished_at=finished_at,
+                obsl=ObslMeta(
+                    base_url=spec.obsl.base_url,
+                    version=_str_or_none(settings_payload.get("version")),
+                    api_version=_str_or_none(settings_payload.get("api_version")),
+                    session_id=session_id,
+                    model_id=model_id,
+                    locale=spec.obsl.locale,
+                    timezone=spec.obsl.timezone,
+                ),
+                queries=list(query_entries),
+                errors=dict(errors),
+                report_path=str(report_path) if report_path is not None else None,
+            )
+            body = render_runlog(run_log)
+            runlog_path.parent.mkdir(parents=True, exist_ok=True)
+            runlog_path.write_text(body, encoding="utf-8")
+            return runlog_path
+        except Exception as exc:  # noqa: BLE001 — never let logging mask the real run outcome
+            log.warning("runlog_write_failed", error=f"{type(exc).__name__}: {exc}")
+            return None
+
+
+def _build_template_context(spec_name: str, basis: datetime, tz_name: str) -> dict[str, Any]:
+    """Build the ``str.format`` context shared by report + runlog paths.
+
+    Single source of truth so the runlog lands next to the report even
+    when the report template uses ``{date}`` / ``{time_filename}`` /
+    ``{tz_filename}`` placeholders. The TZ resolution mirrors what
+    ``_render_report`` did before this was extracted.
+    """
+    try:
+        tz = ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        log.warning("unknown_timezone", tz=tz_name, fallback="UTC")
+        tz_name = "UTC"
+        tz = ZoneInfo("UTC")
+    local_dt = basis.astimezone(tz)
+    is_utc = tz_name.upper() == "UTC"
+    datetime_str = local_dt.strftime("%Y-%m-%dT%H-%M-%S") + ("Z" if is_utc else "")
+    tz_filename = tz_name.replace("/", ", ")
+    return {
+        "name": spec_name,
+        "date": local_dt.strftime("%Y-%m-%d"),
+        "datetime": datetime_str,
+        "time": local_dt.strftime("%H:%M:%S"),
+        "time_filename": local_dt.strftime("%H_%M_%S"),
+        "tz": tz_name,
+        "tz_filename": tz_filename,
+        "timezone": tz_filename,  # alias of tz_filename — friendlier name
+        "runner_version": __version__,
+    }
+
+
+def _resolve_output_path(
+    template: str, ctx: dict[str, Any], output_dir: Path | None
+) -> Path:
+    """Format the report-output template and apply ``--output-dir`` rebasing."""
+    out_path = Path(template.format(**ctx))
+    if output_dir is not None and not out_path.is_absolute():
+        out_path = output_dir / out_path
+    return out_path
+
+
+def _runlog_path_from_report(report_path: Path) -> Path:
+    """Derive the runlog sidecar path from the report path.
+
+    ``foo.md`` / ``foo.html`` → ``foo.run.yaml``. For other templates we
+    append ``.run.yaml`` so the runlog is always uniquely named — never
+    colliding with the report itself.
+    """
+    if report_path.suffix.lower() in {".md", ".html", ".htm"}:
+        return report_path.with_suffix(".run.yaml")
+    return report_path.with_name(report_path.name + ".run.yaml")
+
+
+def _str_or_none(value: Any) -> str | None:
+    """Coerce a ``/v1/settings`` field into a plain ``str | None`` for the runlog."""
+    if value is None:
+        return None
+    return str(value)
 
 
 def _auto_sections(queries: list[QuerySpec]) -> list[ReportSection]:

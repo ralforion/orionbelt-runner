@@ -1,9 +1,18 @@
-"""Markdown rendering for ExecuteResult sections."""
+"""Markdown + HTML rendering for ExecuteResult sections.
+
+The markdown renderer is the source of truth: ``render_html`` converts the
+same markdown body to HTML and wraps it in a self-contained, styled document.
+That keeps the two formats in lockstep — only the markdown shape changes,
+HTML rendering follows.
+"""
 
 from __future__ import annotations
 
+import html
 import re
 from typing import Any
+
+import markdown as md_lib
 
 from orionbelt_runner.client import ExecuteResult
 from orionbelt_runner.spec import ReportSection, ReportSpec
@@ -118,6 +127,96 @@ def _render_list(result: ExecuteResult, column: str | int | None) -> str:
     return "\n".join(items)
 
 
+def render_html(
+    spec: ReportSpec,
+    results: dict[str, ExecuteResult],
+    context: dict[str, Any] | None = None,
+) -> str:
+    """Render the report as a self-contained styled HTML document.
+
+    Pipeline: ``render_markdown`` builds the body, then Python-Markdown's
+    ``tables`` extension converts pipe tables to ``<table>`` markup, and the
+    result is embedded in a minimal HTML5 shell with default CSS. The shell
+    is intentionally self-contained (no external assets) so the output works
+    when emailed, opened from disk, or served from a static host.
+
+    The ``<title>`` mirrors the spec's ``title`` after placeholder
+    substitution, so browser tabs and PDF "Save as" dialogs land on a
+    meaningful name.
+    """
+    ctx: dict[str, Any] = dict(context or {})
+    # Mirror the counters render_markdown injects so callers passing only the
+    # base time/tz context still get identical title substitution behaviour.
+    ctx.setdefault("number_of_queries", len(results))
+    ctx.setdefault("numberOfQueries", len(results))
+    ctx.setdefault("number_of_sections", len(spec.sections))
+    ctx.setdefault("numberOfSections", len(spec.sections))
+    ctx.setdefault("number_of_rows", sum(r.row_count for r in results.values()))
+    ctx.setdefault("numberOfRows", ctx["number_of_rows"])
+
+    body_md = render_markdown(spec, results, context=ctx)
+    body_html = md_lib.markdown(body_md, extensions=["tables"], output_format="html")
+    title = html.escape(spec.title.format(**ctx))
+    return _HTML_TEMPLATE.format(title=title, css=_DEFAULT_CSS, body=body_html)
+
+
+_DEFAULT_CSS = """\
+:root { color-scheme: light dark; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  max-width: 960px;
+  margin: 2rem auto;
+  padding: 0 1.25rem;
+  color: #1a1a1a;
+  line-height: 1.55;
+}
+h1 { font-size: 2rem; border-bottom: 2px solid #d0d7de; padding-bottom: .3rem; }
+h2 { font-size: 1.35rem; margin-top: 2rem; border-bottom: 1px solid #eaeef2;
+     padding-bottom: .2rem; }
+h3 { font-size: 1.1rem; margin-top: 1.5rem; }
+p { margin: .6rem 0; }
+strong { color: #0b5394; }
+hr { border: none; border-top: 1px solid #eaeef2; margin: 2rem 0; }
+ul { padding-left: 1.4rem; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+th, td { border: 1px solid #d0d7de; padding: .4rem .65rem; text-align: left;
+         vertical-align: top; }
+th { background: #f6f8fa; font-weight: 600; }
+tbody tr:nth-child(even) td { background: #fafbfc; }
+code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px;
+       font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+       font-size: .9em; }
+@media (prefers-color-scheme: dark) {
+  body { background: #0d1117; color: #e6edf3; }
+  h1 { border-color: #30363d; }
+  h2, hr { border-color: #21262d; }
+  th { background: #161b22; }
+  th, td { border-color: #30363d; }
+  tbody tr:nth-child(even) td { background: #11161d; }
+  code { background: #161b22; }
+  strong { color: #79c0ff; }
+}
+"""
+
+
+_HTML_TEMPLATE = """\
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<style>
+{css}</style>
+</head>
+<body>
+{body}
+</body>
+</html>
+"""
+
+
 def _resolve_column_index(
     result: ExecuteResult, column: str | int | None, *, prefer_numeric: bool
 ) -> int | None:
@@ -136,6 +235,6 @@ def _resolve_column_index(
                 return i
         if result.rows:
             for i, cell in enumerate(result.rows[0]):
-                if isinstance(cell, (int, float)) and not isinstance(cell, bool):
+                if isinstance(cell, int | float) and not isinstance(cell, bool):
                     return i
     return None

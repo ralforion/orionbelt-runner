@@ -106,12 +106,16 @@ class ReportSpec(BaseModel):
       across all results.
     """
 
-    format: Literal["markdown"] = "markdown"
+    format: Literal["markdown", "html"] = "markdown"
     output: str
     title: str
     intro: str | None = None
     footer: str | None = None
     sections: list[ReportSection] = Field(default_factory=list)
+    # When true, write each query's result rows as TSV into a sibling
+    # ``<report-stem>_exports/`` directory next to the rendered report. One
+    # TSV per query; only successful results are exported.
+    export_results: bool = False
 
 
 class RunSpec(BaseModel):
