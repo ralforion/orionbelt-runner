@@ -14,7 +14,7 @@ import structlog
 from orionbelt_runner import __version__
 from orionbelt_runner.client import ExecuteResult, ObslClient
 from orionbelt_runner.exports import render_tsv, safe_export_filename
-from orionbelt_runner.report import render_html, render_markdown
+from orionbelt_runner.report import render_html, render_markdown, render_pdf
 from orionbelt_runner.runlog import ObslMeta, QueryLogEntry, RunLog, render_runlog
 from orionbelt_runner.spec import ModelSpec, QuerySpec, ReportSection, RunSpec
 
@@ -323,13 +323,19 @@ class Runner:
             auto = _auto_sections(spec.queries)
             if auto:
                 report_spec = report_spec.model_copy(update={"sections": auto})
-        if report_spec.format == "html":
-            body = render_html(report_spec, results, context=ctx)
-        else:
-            body = render_markdown(report_spec, results, context=ctx)
         out_path = _resolve_output_path(spec.report.output, ctx, output_dir)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(body, encoding="utf-8")
+        if report_spec.format == "pdf":
+            pdf_bytes = render_pdf(report_spec, results, context=ctx)
+            out_path.write_bytes(pdf_bytes)
+        elif report_spec.format == "html":
+            out_path.write_text(
+                render_html(report_spec, results, context=ctx), encoding="utf-8"
+            )
+        else:
+            out_path.write_text(
+                render_markdown(report_spec, results, context=ctx), encoding="utf-8"
+            )
         return out_path
 
     def _write_exports(
@@ -458,11 +464,11 @@ def _resolve_output_path(
 def _runlog_path_from_report(report_path: Path) -> Path:
     """Derive the runlog sidecar path from the report path.
 
-    ``foo.md`` / ``foo.html`` → ``foo.run.yaml``. For other templates we
-    append ``.run.yaml`` so the runlog is always uniquely named — never
-    colliding with the report itself.
+    ``foo.md`` / ``foo.html`` / ``foo.pdf`` → ``foo.run.yaml``. For other
+    templates we append ``.run.yaml`` so the runlog is always uniquely
+    named — never colliding with the report itself.
     """
-    if report_path.suffix.lower() in {".md", ".html", ".htm"}:
+    if report_path.suffix.lower() in {".md", ".html", ".htm", ".pdf"}:
         return report_path.with_suffix(".run.yaml")
     return report_path.with_name(report_path.name + ".run.yaml")
 

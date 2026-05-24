@@ -1,6 +1,6 @@
 [project]
 name = "orionbelt-runner"
-version = "0.2.0"
+version = "0.3.0"
 description = "Run OrionBelt Semantic Layer query batches on a schedule and emit reports."
 license = {text = "BSL-1.1"}
 authors = [{name = "Ralf Becher, RALFORION d.o.o.", email = "ralf.becher@web.de"}]
@@ -25,6 +25,13 @@ dependencies = [
 orionbelt-runner = "orionbelt_runner.cli:main"
 
 [project.optional-dependencies]
+# PDF output via WeasyPrint. Pulled in only when needed because WeasyPrint
+# depends on system libraries (Pango, Cairo, GDK-Pixbuf) that not every
+# install target has — markdown / HTML reports stay zero-friction.
+# Install with: uv sync --extra pdf  (or: pip install orionbelt-runner[pdf])
+pdf = [
+    "weasyprint>=62",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -32,6 +39,7 @@ dev = [
     "mypy>=1.10",
     "respx>=0.21",
     "types-Markdown>=3.6",
+    "weasyprint>=62",
 ]
 
 [build-system]

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from orionbelt_runner.client import ExecuteResult
-from orionbelt_runner.report import render_html
+from orionbelt_runner.client import ColumnMetadata, ExecuteResult
+from orionbelt_runner.report import render_html, render_markdown
 from orionbelt_runner.spec import ReportSection, ReportSpec
 
 
@@ -55,6 +55,56 @@ def test_render_html_emits_self_contained_doc() -> None:
     assert "<table>" in html
     assert "<th>Country</th>" in html
     assert "<td>DE</td>" in html
+
+
+def test_formatted_numeric_columns_right_align_in_markdown_and_html() -> None:
+    """Only **formatted** numeric columns right-align.
+
+    The distinction matters because OBSL returns bare integer IDs (Order
+    Key, Customer ID) as ``type == "number"`` but without a format pattern
+    — those should stay left-aligned alongside their text neighbours. A
+    "true" measure (Revenue with format ``#,##0.00``) gets the right-align
+    treatment via GFM ``---:`` syntax, which Python-Markdown's tables
+    extension turns into ``style="text-align: right"``.
+    """
+    spec = ReportSpec(
+        format="html",
+        output="r.html",
+        title="Align",
+        sections=[ReportSection(heading="Mix", query="mix", render="table")],
+    )
+    results = {
+        "mix": ExecuteResult(
+            sql="SELECT 1",
+            dialect="postgres",
+            columns=[
+                ColumnMetadata(name="Country", type="string"),
+                # Bare numeric ID — no format → must NOT right-align.
+                ColumnMetadata(name="Order Key", type="number"),
+                # Formatted measure → MUST right-align.
+                ColumnMetadata(name="Revenue", type="number", format="#,##0.00"),
+            ],
+            rows=[
+                ["DE", "52965", "5.000,00"],
+                ["US", "29158", "7.345,00"],
+            ],
+            row_count=2,
+        ),
+    }
+
+    md = render_markdown(spec, results)
+    # Country (string) and Order Key (unformatted number) stay left;
+    # Revenue (formatted number) gets the GFM right-align marker.
+    assert "| --- | --- | ---: |" in md, md
+
+    html = render_html(spec, results)
+    # String column has no inline style.
+    assert "<th>Country</th>" in html
+    # Unformatted numeric column ALSO has no inline style — this is the
+    # behaviour the user asked for ("number-as-text IDs stay left").
+    assert "<th>Order Key</th>" in html
+    # Formatted numeric column IS right-aligned.
+    assert '<th style="text-align: right;">Revenue</th>' in html
 
 
 def test_render_html_escapes_head_title() -> None:

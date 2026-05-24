@@ -75,7 +75,10 @@ class ReportSection(BaseModel):
 
 
 class ReportSpec(BaseModel):
-    """Markdown report config. PDF / chart formats land later.
+    """Report config. Markdown / HTML / PDF — chart formats land later.
+
+    ``format: pdf`` reuses the HTML pipeline (HTML body → WeasyPrint → PDF)
+    and requires the optional ``pdf`` extra: ``uv sync --extra pdf``.
 
     ``output`` / ``title`` / ``intro`` all run through ``str.format`` against
     the same placeholder set:
@@ -106,7 +109,7 @@ class ReportSpec(BaseModel):
       across all results.
     """
 
-    format: Literal["markdown", "html"] = "markdown"
+    format: Literal["markdown", "html", "pdf"] = "markdown"
     output: str
     title: str
     intro: str | None = None

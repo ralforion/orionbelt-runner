@@ -36,3 +36,5 @@ uv.lock
 reports/
 *.md.out
 *.pdf
+# …except the shipped sample outputs under examples/.
+!examples/*.pdf

@@ -6,19 +6,32 @@ A run is a YAML document combining:
 
 - An **OBSL endpoint** (base URL, optional auth, optional locale/timezone, optional model to load)
 - A list of **named queries** — any valid OBML query body
-- A **report config** — markdown or HTML output with sections bound to queries
+- A **report config** — markdown, HTML, or PDF output with sections bound to queries
 
-Numeric and timestamp cells are pre-rendered server-side using each column's `format` pattern from the OBML model (the runner sends `format_values=true` on every query), so reports show e.g. `1.853.429,67` for `locale: de` without any client-side formatting. See [`examples/monthly-revenue-2026-04-29.md`](examples/monthly-revenue-2026-04-29.md) (markdown) and [`examples/monthly-revenue-2026-04-29.html`](examples/monthly-revenue-2026-04-29.html) (HTML) for sample outputs.
+Numeric and timestamp cells are pre-rendered server-side using each column's `format` pattern from the OBML model (the runner sends `format_values=true` on every query), so reports show e.g. `1.853.429,67` for `locale: de` without any client-side formatting. See [`examples/monthly-revenue-2026-04-29.md`](examples/monthly-revenue-2026-04-29.md) (markdown), [`examples/monthly-revenue-2026-04-29.html`](examples/monthly-revenue-2026-04-29.html) (HTML), and [`examples/monthly-revenue-2026-04-29.pdf`](examples/monthly-revenue-2026-04-29.pdf) (PDF) for sample outputs.
 
 ## Status
 
-Early scaffold (v0.2.0). Markdown and HTML reports, with optional per-query TSV exports and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
+Early scaffold (v0.3.0). Markdown, HTML, and PDF reports, with optional per-query TSV exports and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
 
 ## Install
 
 ```bash
-uv sync
+uv sync                  # core: markdown + HTML reports
+uv sync --extra pdf      # also enable PDF output (requires Pango / Cairo)
 ```
+
+PDF output needs WeasyPrint, which depends on system libraries (Pango,
+Cairo, GDK-Pixbuf). On macOS: `brew install pango`. On Debian / Ubuntu:
+`apt install libpango-1.0-0 libpangoft2-1.0-0`. See the
+[WeasyPrint install guide](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation)
+for other platforms. Skip the extra if you only need markdown / HTML.
+
+> **Apple Silicon note:** Homebrew installs libraries to `/opt/homebrew/lib`,
+> which Python's loader doesn't search by default. If WeasyPrint can't find
+> `libgobject-2.0-0`, prefix the runner with:
+> `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib uv run orionbelt-runner ...`
+> (or export it in your shell profile).
 
 ## Run
 
@@ -103,7 +116,7 @@ report:
 | `{time_filename}` | `18_02_06` | filesystem-safe |
 | `{tz}` | `Europe/Berlin` | IANA name |
 | `{tz_filename}` / `{timezone}` | `Europe, Berlin` | `/` replaced with `, ` for path safety |
-| `{runner_version}` | `0.2.0` | the OrionBelt Runner version that produced this report |
+| `{runner_version}` | `0.3.0` | the OrionBelt Runner version that produced this report |
 
 `report.footer` additionally accepts result-derived counters: `{number_of_queries}`, `{number_of_sections}`, `{number_of_rows}` (camelCase aliases — `{numberOfQueries}` etc. — also work).
 
@@ -133,7 +146,7 @@ reports/monthly-revenue-2026-04-29_exports/     ← TSV exports (opt-in)
   └── top_orders_raw.tsv
 ```
 
-### Report — markdown or HTML
+### Report — markdown, HTML, or PDF
 
 `format: markdown` (default) writes a `.md`. `format: html` writes a self-contained HTML5 document with inline default CSS and a light/dark theme — no external assets, so the file works when emailed, opened from disk, or served from a static host. The output extension follows the template you set in `output:`.
 
@@ -145,6 +158,17 @@ report:
 ```
 
 See [`examples/monthly-revenue-2026-04-29.html`](examples/monthly-revenue-2026-04-29.html) for a rendered HTML sample.
+
+`format: pdf` reuses the same HTML pipeline and runs the result through [WeasyPrint](https://weasyprint.org/) — so PDF layout stays automatically in lockstep with the HTML output. A print-only stylesheet adds A4 margins and a `page n / total` footer; section headings (`h2`) get a `page-break-before: auto` / `page-break-after: avoid` hint so tables don't get orphaned.
+
+```yaml
+report:
+  format: pdf
+  output: reports/{name}-{date}.pdf
+  title: "Monthly Revenue — {date}"
+```
+
+PDF requires the optional `pdf` extra (`uv sync --extra pdf`) and WeasyPrint's [system libraries](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation) — see [Install](#install). See [`examples/monthly-revenue-2026-04-29.pdf`](examples/monthly-revenue-2026-04-29.pdf) for a rendered PDF sample.
 
 ### Run log (YAML sidecar) — always written
 
@@ -175,7 +199,7 @@ The runner talks to OBSL through a small `ObslClient` Protocol. One implementati
 ```
 spec.yaml ──▶ load_spec ──▶ Runner ──▶ ObslClient ──▶ OBSL (HTTP)
                               │
-                              ├─▶ render_markdown / render_html ──▶ report.md|html
+                              ├─▶ render_markdown / render_html / render_pdf ──▶ report.md|html|pdf
                               ├─▶ render_runlog                 ──▶ report.run.yaml
                               └─▶ render_tsv (× N)              ──▶ report_exports/*.tsv
 ```

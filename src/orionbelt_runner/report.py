@@ -14,7 +14,7 @@ from typing import Any
 
 import markdown as md_lib
 
-from orionbelt_runner.client import ExecuteResult
+from orionbelt_runner.client import ColumnMetadata, ExecuteResult
 from orionbelt_runner.spec import ReportSection, ReportSpec
 
 # Anchored regex spans (e.g. ``^[A-Z]{2}$``) inside a description trip
@@ -86,17 +86,37 @@ def _safe_description(text: str) -> str:
 def _render_table(result: ExecuteResult) -> str:
     if not result.columns:
         return "_No columns returned._"
-    names = [c.name for c in result.columns]
     if not result.rows:
-        return _table_header(names) + "\n_No rows._"
+        return _table_header(result.columns) + "\n_No rows._"
     rows = [_format_row(r) for r in result.rows]
-    return _table_header(names) + "\n" + "\n".join(rows)
+    return _table_header(result.columns) + "\n" + "\n".join(rows)
 
 
-def _table_header(names: list[str]) -> str:
-    header = "| " + " | ".join(names) + " |"
-    sep = "| " + " | ".join("---" for _ in names) + " |"
+def _table_header(columns: list[ColumnMetadata]) -> str:
+    """Render the GFM ``| name | name |`` / ``| ---: | --- |`` header rows.
+
+    Right-alignment is reserved for **formatted** numeric columns — i.e.
+    ``type == "number"`` AND a ``format`` pattern is set on the column.
+    Quantities (revenue, ratios, durations) carry a format pattern from
+    the OBML model and read best right-aligned; bare integer IDs (order
+    keys, customer IDs) don't carry one and read better left-aligned with
+    their text neighbours. This mirrors the preflight check, which uses
+    "missing format" as the signal that a column isn't a display-formatted
+    measure.
+
+    The alignment hint propagates to HTML / PDF automatically because
+    Python-Markdown's ``tables`` extension emits ``text-align: right`` on
+    the rendered ``<th>`` / ``<td>`` when the separator is ``---:``.
+    """
+    header = "| " + " | ".join(c.name for c in columns) + " |"
+    sep = "| " + " | ".join(_align_marker(c) for c in columns) + " |"
     return f"{header}\n{sep}"
+
+
+def _align_marker(col: ColumnMetadata) -> str:
+    if col.type == "number" and col.format:
+        return "---:"
+    return "---"
 
 
 def _format_row(row: list[Any]) -> str:
@@ -131,6 +151,8 @@ def render_html(
     spec: ReportSpec,
     results: dict[str, ExecuteResult],
     context: dict[str, Any] | None = None,
+    *,
+    extra_css: str = "",
 ) -> str:
     """Render the report as a self-contained styled HTML document.
 
@@ -143,6 +165,9 @@ def render_html(
     The ``<title>`` mirrors the spec's ``title`` after placeholder
     substitution, so browser tabs and PDF "Save as" dialogs land on a
     meaningful name.
+
+    ``extra_css`` is appended after the default stylesheet so PDF rendering
+    can inject ``@page`` rules without forking the template.
     """
     ctx: dict[str, Any] = dict(context or {})
     # Mirror the counters render_markdown injects so callers passing only the
@@ -157,7 +182,42 @@ def render_html(
     body_md = render_markdown(spec, results, context=ctx)
     body_html = md_lib.markdown(body_md, extensions=["tables"], output_format="html")
     title = html.escape(spec.title.format(**ctx))
-    return _HTML_TEMPLATE.format(title=title, css=_DEFAULT_CSS, body=body_html)
+    css = _DEFAULT_CSS + extra_css
+    return _HTML_TEMPLATE.format(title=title, css=css, body=body_html)
+
+
+def render_pdf(
+    spec: ReportSpec,
+    results: dict[str, ExecuteResult],
+    context: dict[str, Any] | None = None,
+) -> bytes:
+    """Render the report as a PDF document, returning the raw bytes.
+
+    PDF is produced by handing the HTML render to WeasyPrint, so the layout
+    stays in lockstep with ``render_html`` automatically — only the page box
+    (margins, page numbers, page-break hints on ``h2``) is added on top via
+    ``@page`` and print-only CSS.
+
+    WeasyPrint is an optional dependency (it pulls in Pango / Cairo at the
+    system level). Install with ``uv sync --extra pdf`` or
+    ``pip install orionbelt-runner[pdf]``. The import is local so the rest
+    of the package keeps working without it.
+    """
+    try:
+        from weasyprint import HTML  # type: ignore[import-untyped]
+    except ImportError as exc:  # pragma: no cover — exercised by docs / install path
+        raise RuntimeError(
+            "PDF output requires WeasyPrint. Install the PDF extra with "
+            "`uv sync --extra pdf` (or `pip install orionbelt-runner[pdf]`). "
+            "WeasyPrint also needs Pango / Cairo system libraries — see "
+            "https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation"
+        ) from exc
+
+    html_doc = render_html(spec, results, context=context, extra_css=_PRINT_CSS)
+    # WeasyPrint is untyped, so write_pdf() comes back as Any — cast back
+    # to bytes (write_pdf(target=None) is documented to return bytes).
+    pdf_bytes: bytes = HTML(string=html_doc).write_pdf()
+    return pdf_bytes
 
 
 _DEFAULT_CSS = """\
@@ -179,7 +239,8 @@ p { margin: .6rem 0; }
 strong { color: #0b5394; }
 hr { border: none; border-top: 1px solid #eaeef2; margin: 2rem 0; }
 ul { padding-left: 1.4rem; }
-table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem;
+        font-variant-numeric: tabular-nums; }
 th, td { border: 1px solid #d0d7de; padding: .4rem .65rem; text-align: left;
          vertical-align: top; }
 th { background: #f6f8fa; font-weight: 600; }
@@ -196,6 +257,41 @@ code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px;
   tbody tr:nth-child(even) td { background: #11161d; }
   code { background: #161b22; }
   strong { color: #79c0ff; }
+}
+"""
+
+
+# Print-only overlay appended after _DEFAULT_CSS when rendering for PDF.
+# WeasyPrint honours @page (page box / margins / page numbers) and CSS
+# print rules — neither has any effect when the same HTML is viewed in a
+# browser, so the on-screen HTML output is unaffected. The dark-mode block
+# in _DEFAULT_CSS is neutralised here so the PDF is reliably light-on-white
+# regardless of the host OS appearance setting.
+_PRINT_CSS = """
+@page {
+  size: A4;
+  margin: 18mm 16mm 20mm 16mm;
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 9pt;
+    color: #6b7280;
+  }
+}
+@media print {
+  body { max-width: none; margin: 0; padding: 0; background: #fff; color: #1a1a1a; }
+  h1 { border-color: #d0d7de; }
+  h2 { page-break-before: auto; page-break-after: avoid; border-color: #eaeef2; }
+  h3 { page-break-after: avoid; }
+  table { page-break-inside: auto; }
+  tr   { page-break-inside: avoid; page-break-after: auto; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  th { background: #f6f8fa; }
+  tbody tr:nth-child(even) td { background: #fafbfc; }
+  code { background: #f3f4f6; }
+  strong { color: #0b5394; }
 }
 """
 
