@@ -12,7 +12,7 @@ Numeric and timestamp cells are pre-rendered server-side using each column's `fo
 
 ## Status
 
-Early scaffold (v0.3.0). Markdown, HTML, and PDF reports, with optional per-query TSV exports and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
+Early scaffold (v0.3.1). Markdown, HTML, and PDF reports, with optional per-query TSV exports and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
 
 ## Install
 
@@ -116,7 +116,7 @@ report:
 | `{time_filename}` | `18_02_06` | filesystem-safe |
 | `{tz}` | `Europe/Berlin` | IANA name |
 | `{tz_filename}` / `{timezone}` | `Europe, Berlin` | `/` replaced with `, ` for path safety |
-| `{runner_version}` | `0.3.0` | the OrionBelt Runner version that produced this report |
+| `{runner_version}` | `0.3.1` | the OrionBelt Runner version that produced this report |
 
 `report.footer` additionally accepts result-derived counters: `{number_of_queries}`, `{number_of_sections}`, `{number_of_rows}` (camelCase aliases — `{numberOfQueries}` etc. — also work).
 
@@ -159,14 +159,18 @@ report:
 
 See [`examples/monthly-revenue-2026-04-29.html`](examples/monthly-revenue-2026-04-29.html) for a rendered HTML sample.
 
-`format: pdf` reuses the same HTML pipeline and runs the result through [WeasyPrint](https://weasyprint.org/) — so PDF layout stays automatically in lockstep with the HTML output. A print-only stylesheet adds A4 margins and a `page n / total` footer; section headings (`h2`) get a `page-break-before: auto` / `page-break-after: avoid` hint so tables don't get orphaned.
+`format: pdf` reuses the same HTML pipeline and runs the result through [WeasyPrint](https://weasyprint.org/) — so PDF layout stays automatically in lockstep with the HTML output. A print-only stylesheet adds page margins and a `page n / total` footer; section headings (`h2`) get a `page-break-before: auto` / `page-break-after: avoid` hint so tables don't get orphaned.
 
 ```yaml
 report:
   format: pdf
   output: reports/{name}-{date}.pdf
   title: "Monthly Revenue — {date}"
+  pdf_page_size: A4         # "A4" (default) or "A3"
+  pdf_orientation: portrait # "portrait" (default) or "landscape"
 ```
+
+`pdf_page_size` and `pdf_orientation` are ignored for `markdown` / `html` output. Reach for **A3** or **landscape** when a table has many columns or wide cell values that wrap awkwardly in A4 portrait — the same content, just more horizontal room.
 
 PDF requires the optional `pdf` extra (`uv sync --extra pdf`) and WeasyPrint's [system libraries](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation) — see [Install](#install). See [`examples/monthly-revenue-2026-04-29.pdf`](examples/monthly-revenue-2026-04-29.pdf) for a rendered PDF sample.
 

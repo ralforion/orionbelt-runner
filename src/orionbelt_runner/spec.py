@@ -110,6 +110,12 @@ class ReportSpec(BaseModel):
     """
 
     format: Literal["markdown", "html", "pdf"] = "markdown"
+    # PDF page size + orientation. Ignored for markdown / HTML output.
+    # A4 portrait is the default because most reports are headline +
+    # a few narrow tables. Use A3 (or landscape) for wide tables with
+    # many columns or long values that would otherwise wrap.
+    pdf_page_size: Literal["A4", "A3"] = "A4"
+    pdf_orientation: Literal["portrait", "landscape"] = "portrait"
     output: str
     title: str
     intro: str | None = None

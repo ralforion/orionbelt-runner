@@ -84,6 +84,55 @@ def test_render_pdf_returns_pdf_bytes() -> None:
     assert b"%%EOF" in data[-32:]
 
 
+def test_print_css_emits_expected_at_page_rule() -> None:
+    """``_print_css`` is the seam between spec settings and WeasyPrint —
+    it builds the ``@page { size: ... }`` declaration. Unit-testing the
+    string is cheap and decisive: we trust WeasyPrint to honour what the
+    CSS says, so checking the CSS proves the right paper + rotation
+    reach the renderer.
+    """
+    from orionbelt_runner.report import _print_css
+
+    assert "size: A4;" in _print_css("A4", "portrait")
+    assert "size: A4 landscape;" in _print_css("A4", "landscape")
+    assert "size: A3;" in _print_css("A3", "portrait")
+    assert "size: A3 landscape;" in _print_css("A3", "landscape")
+
+
+def test_render_pdf_honours_page_size_and_orientation() -> None:
+    """End-to-end smoke: each of A4/A3 × portrait/landscape produces a
+    valid PDF, and all four byte streams differ.
+
+    The CSS construction is unit-tested above; this test guards against
+    the wiring breaking — e.g. ``render_pdf`` forgetting to read the
+    spec fields and falling through to a single default for everything.
+    """
+    from orionbelt_runner.spec import ReportSection, ReportSpec
+
+    def _pdf(page_size: str, orientation: str) -> bytes:
+        spec = ReportSpec(
+            format="pdf",
+            output="r.pdf",
+            title="Geom",
+            pdf_page_size=page_size,  # type: ignore[arg-type]
+            pdf_orientation=orientation,  # type: ignore[arg-type]
+            sections=[ReportSection(heading="By country", query="by_country", render="table")],
+        )
+        return render_pdf(spec, _results(), context={"date": "2026-05-04"})
+
+    pdfs = {
+        "a4_p": _pdf("A4", "portrait"),
+        "a4_l": _pdf("A4", "landscape"),
+        "a3_p": _pdf("A3", "portrait"),
+        "a3_l": _pdf("A3", "landscape"),
+    }
+    for name, data in pdfs.items():
+        assert data.startswith(b"%PDF-"), f"{name}: not a PDF"
+        assert b"%%EOF" in data[-32:], f"{name}: missing EOF"
+    # No combination is silently collapsing to the same render.
+    assert len(set(pdfs.values())) == 4
+
+
 def test_runner_writes_pdf_report(tmp_path: Path) -> None:
     """``report.format: pdf`` writes a binary .pdf and still emits the runlog
     as ``<stem>.run.yaml`` (not ``<stem>.pdf.run.yaml``)."""

@@ -213,7 +213,8 @@ def render_pdf(
             "https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation"
         ) from exc
 
-    html_doc = render_html(spec, results, context=context, extra_css=_PRINT_CSS)
+    print_css = _print_css(spec.pdf_page_size, spec.pdf_orientation)
+    html_doc = render_html(spec, results, context=context, extra_css=print_css)
     # WeasyPrint is untyped, so write_pdf() comes back as Any — cast back
     # to bytes (write_pdf(target=None) is documented to return bytes).
     pdf_bytes: bytes = HTML(string=html_doc).write_pdf()
@@ -261,38 +262,48 @@ code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px;
 """
 
 
-# Print-only overlay appended after _DEFAULT_CSS when rendering for PDF.
-# WeasyPrint honours @page (page box / margins / page numbers) and CSS
-# print rules — neither has any effect when the same HTML is viewed in a
-# browser, so the on-screen HTML output is unaffected. The dark-mode block
-# in _DEFAULT_CSS is neutralised here so the PDF is reliably light-on-white
-# regardless of the host OS appearance setting.
-_PRINT_CSS = """
-@page {
-  size: A4;
+def _print_css(page_size: str, orientation: str) -> str:
+    """Build the print-only CSS overlay for a given page size + orientation.
+
+    Appended after ``_DEFAULT_CSS`` when rendering for PDF. WeasyPrint
+    honours ``@page`` (page box / margins / page numbers) and CSS print
+    rules — neither has any effect when the same HTML is viewed in a
+    browser, so the on-screen HTML output is unaffected. The dark-mode
+    block in ``_DEFAULT_CSS`` is neutralised here so the PDF is reliably
+    light-on-white regardless of the host OS appearance setting.
+
+    ``page_size`` is ``"A4"`` (default) or ``"A3"``; ``orientation`` is
+    ``"portrait"`` (default) or ``"landscape"``. The spec validates the
+    literals so callers can't pass anything else.
+    """
+    # CSS @page: "A4" / "A3" for portrait; append " landscape" otherwise.
+    size_rule = page_size if orientation == "portrait" else f"{page_size} landscape"
+    return f"""
+@page {{
+  size: {size_rule};
   margin: 18mm 16mm 20mm 16mm;
-  @bottom-right {
+  @bottom-right {{
     content: counter(page) " / " counter(pages);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
                  "Helvetica Neue", Arial, sans-serif;
     font-size: 9pt;
     color: #6b7280;
-  }
-}
-@media print {
-  body { max-width: none; margin: 0; padding: 0; background: #fff; color: #1a1a1a; }
-  h1 { border-color: #d0d7de; }
-  h2 { page-break-before: auto; page-break-after: avoid; border-color: #eaeef2; }
-  h3 { page-break-after: avoid; }
-  table { page-break-inside: auto; }
-  tr   { page-break-inside: avoid; page-break-after: auto; }
-  thead { display: table-header-group; }
-  tfoot { display: table-footer-group; }
-  th { background: #f6f8fa; }
-  tbody tr:nth-child(even) td { background: #fafbfc; }
-  code { background: #f3f4f6; }
-  strong { color: #0b5394; }
-}
+  }}
+}}
+@media print {{
+  body {{ max-width: none; margin: 0; padding: 0; background: #fff; color: #1a1a1a; }}
+  h1 {{ border-color: #d0d7de; }}
+  h2 {{ page-break-before: auto; page-break-after: avoid; border-color: #eaeef2; }}
+  h3 {{ page-break-after: avoid; }}
+  table {{ page-break-inside: auto; }}
+  tr   {{ page-break-inside: avoid; page-break-after: auto; }}
+  thead {{ display: table-header-group; }}
+  tfoot {{ display: table-footer-group; }}
+  th {{ background: #f6f8fa; }}
+  tbody tr:nth-child(even) td {{ background: #fafbfc; }}
+  code {{ background: #f3f4f6; }}
+  strong {{ color: #0b5394; }}
+}}
 """
 
 
