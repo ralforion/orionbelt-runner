@@ -95,14 +95,13 @@ def _render_table(result: ExecuteResult) -> str:
 def _table_header(columns: list[ColumnMetadata]) -> str:
     """Render the GFM ``| name | name |`` / ``| ---: | --- |`` header rows.
 
-    Right-alignment is reserved for **formatted** numeric columns — i.e.
-    ``type == "number"`` AND a ``format`` pattern is set on the column.
-    Quantities (revenue, ratios, durations) carry a format pattern from
-    the OBML model and read best right-aligned; bare integer IDs (order
-    keys, customer IDs) don't carry one and read better left-aligned with
-    their text neighbours. This mirrors the preflight check, which uses
-    "missing format" as the signal that a column isn't a display-formatted
-    measure.
+    Right-alignment is reserved for **quantity-formatted** numeric columns —
+    ``type == "number"`` AND a ``format`` pattern that contains something
+    other than ``0`` / ``#`` (a separator, decimal, ``%``, or currency
+    symbol). Bare-integer formats like ``"0"`` or ``"000000"`` (used for
+    coded integers such as YYYYMM reporting periods or padded IDs) stay
+    left-aligned alongside their text neighbours, and columns with no
+    format pattern at all stay left-aligned for the same reason.
 
     The alignment hint propagates to HTML / PDF automatically because
     Python-Markdown's ``tables`` extension emits ``text-align: right`` on
@@ -113,8 +112,14 @@ def _table_header(columns: list[ColumnMetadata]) -> str:
     return f"{header}\n{sep}"
 
 
+# A "quantity" format contains at least one character that isn't a pure
+# digit placeholder — separator, decimal, percent, or currency symbol.
+# Bare patterns like "0" or "000000" match nothing here and stay left.
+_QUANTITY_FORMAT = re.compile(r"[^0#]")
+
+
 def _align_marker(col: ColumnMetadata) -> str:
-    if col.type == "number" and col.format:
+    if col.type == "number" and col.format and _QUANTITY_FORMAT.search(col.format):
         return "---:"
     return "---"
 

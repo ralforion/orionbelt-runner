@@ -12,7 +12,7 @@ Numeric and timestamp cells are pre-rendered server-side using each column's `fo
 
 ## Status
 
-Early scaffold (v0.3.1). Markdown, HTML, and PDF reports, with optional per-query TSV exports and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
+Early scaffold (v0.4.0). Markdown, HTML, and PDF reports, with optional per-query TSV exports and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
 
 ## Install
 
@@ -30,8 +30,16 @@ for other platforms. Skip the extra if you only need markdown / HTML.
 > **Apple Silicon note:** Homebrew installs libraries to `/opt/homebrew/lib`,
 > which Python's loader doesn't search by default. If WeasyPrint can't find
 > `libgobject-2.0-0`, prefix the runner with:
-> `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib uv run orionbelt-runner ...`
-> (or export it in your shell profile).
+>
+> ```bash
+> DYLD_LIBRARY_PATH=/opt/homebrew/lib:/usr/local/lib \
+> DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib:/usr/local/lib \
+> uv run orionbelt-runner run spec.yaml
+> ```
+>
+> `DYLD_FALLBACK_LIBRARY_PATH` is often enough, but setting both variables
+> covers Python/cffi environments that call `dlopen()` with bare library
+> names such as `libgobject-2.0-0`.
 
 ## Run
 
@@ -116,7 +124,7 @@ report:
 | `{time_filename}` | `18_02_06` | filesystem-safe |
 | `{tz}` | `Europe/Berlin` | IANA name |
 | `{tz_filename}` / `{timezone}` | `Europe, Berlin` | `/` replaced with `, ` for path safety |
-| `{runner_version}` | `0.3.1` | the OrionBelt Runner version that produced this report |
+| `{runner_version}` | `0.4.0` | the OrionBelt Runner version that produced this report |
 
 `report.footer` additionally accepts result-derived counters: `{number_of_queries}`, `{number_of_sections}`, `{number_of_rows}` (camelCase aliases — `{numberOfQueries}` etc. — also work).
 

@@ -58,14 +58,15 @@ def test_render_html_emits_self_contained_doc() -> None:
 
 
 def test_formatted_numeric_columns_right_align_in_markdown_and_html() -> None:
-    """Only **formatted** numeric columns right-align.
+    """Only **quantity-formatted** numeric columns right-align.
 
     The distinction matters because OBSL returns bare integer IDs (Order
-    Key, Customer ID) as ``type == "number"`` but without a format pattern
-    — those should stay left-aligned alongside their text neighbours. A
-    "true" measure (Revenue with format ``#,##0.00``) gets the right-align
-    treatment via GFM ``---:`` syntax, which Python-Markdown's tables
-    extension turns into ``style="text-align: right"``.
+    Key, Customer ID) as ``type == "number"`` with no format pattern, and
+    coded integers like YYYYMM reporting periods carry a bare ``"0"`` /
+    ``"000000"`` format — neither is a measure, both should stay left.
+    Only quantity formats (containing a separator, decimal, ``%``, or
+    currency symbol) trigger the GFM ``---:`` syntax, which Python-Markdown's
+    tables extension turns into ``style="text-align: right"``.
     """
     spec = ReportSpec(
         format="html",
@@ -81,21 +82,24 @@ def test_formatted_numeric_columns_right_align_in_markdown_and_html() -> None:
                 ColumnMetadata(name="Country", type="string"),
                 # Bare numeric ID — no format → must NOT right-align.
                 ColumnMetadata(name="Order Key", type="number"),
+                # Coded integer (YYYYMM period) with a bare-integer format
+                # → must NOT right-align.
+                ColumnMetadata(name="Reporting Period", type="number", format="0"),
                 # Formatted measure → MUST right-align.
                 ColumnMetadata(name="Revenue", type="number", format="#,##0.00"),
             ],
             rows=[
-                ["DE", "52965", "5.000,00"],
-                ["US", "29158", "7.345,00"],
+                ["DE", "52965", "202604", "5.000,00"],
+                ["US", "29158", "202604", "7.345,00"],
             ],
             row_count=2,
         ),
     }
 
     md = render_markdown(spec, results)
-    # Country (string) and Order Key (unformatted number) stay left;
-    # Revenue (formatted number) gets the GFM right-align marker.
-    assert "| --- | --- | ---: |" in md, md
+    # Country (string), Order Key (unformatted number), and Reporting Period
+    # (bare-integer format) stay left; Revenue (quantity format) right-aligns.
+    assert "| --- | --- | --- | ---: |" in md, md
 
     html = render_html(spec, results)
     # String column has no inline style.
@@ -103,7 +107,9 @@ def test_formatted_numeric_columns_right_align_in_markdown_and_html() -> None:
     # Unformatted numeric column ALSO has no inline style — this is the
     # behaviour the user asked for ("number-as-text IDs stay left").
     assert "<th>Order Key</th>" in html
-    # Formatted numeric column IS right-aligned.
+    # Coded-integer numeric column stays left too (the YYYYMM period fix).
+    assert "<th>Reporting Period</th>" in html
+    # Quantity-formatted numeric column IS right-aligned.
     assert '<th style="text-align: right;">Revenue</th>' in html
 
 
@@ -120,6 +126,4 @@ def test_render_html_escapes_head_title() -> None:
         title='Q1 "Revenue" & <growth> — {date}',
     )
     html = render_html(spec, {}, context={"date": "2026-05-04"})
-    assert (
-        "<title>Q1 &quot;Revenue&quot; &amp; &lt;growth&gt; — 2026-05-04</title>" in html
-    )
+    assert "<title>Q1 &quot;Revenue&quot; &amp; &lt;growth&gt; — 2026-05-04</title>" in html
