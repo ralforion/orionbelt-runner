@@ -8,12 +8,56 @@ runner, report, or CLI code.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Protocol
 
 import httpx
+import structlog
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from orionbelt_runner import __version__
+
+log = structlog.get_logger("orionbelt_runner.client")
+
+# OBSL >= 2.12 reads the API key from this header by default (configurable
+# server-side via API_KEY_HEADER; Authorization: Bearer is also accepted as a
+# fallback). Sending it is safe against pre-auth servers — they ignore it.
+DEFAULT_API_KEY_HEADER = "X-API-Key"
+
+# This runner's 0.5.x line tracks the OBSL 2.12 minor series — the API surface
+# (unified auth, the endpoints used here) is pinned to that release. Bump these
+# in lockstep with the runner's own minor version.
+SUPPORTED_OBSL_MAJOR = 2
+SUPPORTED_OBSL_MINOR = 12
+
+_SEMVER_RE = re.compile(r"\s*v?(\d+)\.(\d+)(?:\.(\d+))?")
+
+
+class ObslAuthError(httpx.HTTPStatusError):
+    """OBSL rejected the request with 401 (key missing) or 403 (key invalid).
+
+    A dedicated subclass so callers can distinguish an auth failure from any
+    other HTTP error. The message carries OBSL's structured ``{code, message}``
+    detail plus a hint about how to supply the key.
+    """
+
+
+class ObslPreflightError(RuntimeError):
+    """A startup compatibility check failed before any query ran."""
+
+
+class ObslVersionError(ObslPreflightError):
+    """The OBSL server version is outside the line this runner supports."""
+
+
+def _parse_semver(value: str | None) -> tuple[int, int, int] | None:
+    """Parse a leading ``[v]MAJOR.MINOR[.PATCH]`` into a tuple, or None."""
+    if not value:
+        return None
+    m = _SEMVER_RE.match(value)
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)), int(m.group(3) or 0)
 
 
 class ColumnMetadata(BaseModel):
@@ -215,13 +259,16 @@ class HttpObslClient:
         self,
         base_url: str = "http://localhost:8080",
         *,
-        api_token: str | None = None,
+        api_key: str | None = None,
+        api_key_header: str = DEFAULT_API_KEY_HEADER,
         timeout_seconds: float = 30.0,
     ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._api_key_header = api_key_header or DEFAULT_API_KEY_HEADER
+        self._has_key = bool(api_key)
         headers: dict[str, str] = {"User-Agent": f"orionbelt-runner/{__version__}"}
-        if api_token:
-            headers["Authorization"] = f"Bearer {api_token}"
+        if api_key:
+            headers[self._api_key_header] = api_key
         self._client = httpx.Client(
             base_url=self._base_url,
             timeout=timeout_seconds,
@@ -236,6 +283,58 @@ class HttpObslClient:
 
     def close(self) -> None:
         self._client.close()
+
+    # -- startup compatibility check ---------------------------------------
+
+    def check_compatibility(self) -> dict[str, Any]:
+        """Check the server before a run and fail fast with a clear message.
+
+        Calls the unauthenticated ``/health`` endpoint (which reports the OBSL
+        release version and the active auth mode) and then verifies:
+
+        * the server version is in the supported ``2.12.x`` line, and
+        * a key is configured when the server enforces ``AUTH_MODE=api_key``.
+
+        Returns the ``/health`` payload. Raises :class:`ObslVersionError` or
+        :class:`ObslPreflightError` on a failed check; transport failures
+        (server unreachable) propagate as ``httpx`` errors.
+        """
+        payload = self.health()
+        self._check_version(payload.get("version"))
+        self._check_auth_mode(payload.get("auth_mode"))
+        return payload
+
+    def _check_version(self, version: Any) -> None:
+        reported = version if isinstance(version, str) else None
+        parsed = _parse_semver(reported)
+        if parsed is None:
+            # Don't brick the run on a missing / unparseable version string —
+            # warn and proceed (older servers may not report one).
+            log.warning("obsl_version_unparsed", reported=reported)
+            return
+        major, minor, _patch = parsed
+        if (major, minor) == (SUPPORTED_OBSL_MAJOR, SUPPORTED_OBSL_MINOR):
+            return
+        want = f"{SUPPORTED_OBSL_MAJOR}.{SUPPORTED_OBSL_MINOR}.x"
+        if (major, minor) < (SUPPORTED_OBSL_MAJOR, SUPPORTED_OBSL_MINOR):
+            direction = f"too old — upgrade OBSL to {want}"
+        else:
+            direction = (
+                f"newer than this runner supports — upgrade orionbelt-runner "
+                f"(this is {__version__}) to a release that tracks OBSL "
+                f"{major}.{minor}.x"
+            )
+        raise ObslVersionError(
+            f"OBSL server reports version {reported!r}, but orionbelt-runner "
+            f"{__version__} requires OBSL {want}: {direction}."
+        )
+
+    def _check_auth_mode(self, auth_mode: Any) -> None:
+        if auth_mode == "api_key" and not self._has_key:
+            raise ObslPreflightError(
+                "OBSL has AUTH_MODE=api_key but no API key is configured. "
+                "Set obsl.api_key in the spec or OBSL_API_KEY in the environment."
+            )
 
     # -- public protocol methods -------------------------------------------
 
@@ -347,10 +446,15 @@ class HttpObslClient:
 
     # -- helpers -----------------------------------------------------------
 
-    @staticmethod
-    def _raise_for_status(r: httpx.Response) -> None:
+    def _raise_for_status(self, r: httpx.Response) -> None:
         if r.is_success:
             return
+        # 401/403 mean OBSL auth (AUTH_MODE=api_key) rejected us. Translate
+        # into a dedicated error with a concrete next step — these are the
+        # failures an operator hits first when pointing the runner at a
+        # secured OBSL >= 2.12 deployment.
+        if r.status_code in (401, 403):
+            raise self._auth_error(r)
         # OBSL returns structured error detail (FastAPI default). Surface it
         # in the exception message so failures are diagnosable from logs.
         body = r.text
@@ -358,6 +462,39 @@ class HttpObslClient:
             body = body[:500] + "…"
         raise httpx.HTTPStatusError(
             f"{r.status_code} {r.reason_phrase} from {r.request.method} {r.request.url}: {body}",
+            request=r.request,
+            response=r,
+        )
+
+    def _auth_error(self, r: httpx.Response) -> ObslAuthError:
+        """Build an :class:`ObslAuthError` from a 401/403 response."""
+        code: str | None = None
+        message: str | None = None
+        try:
+            detail = r.json().get("detail")
+        except (ValueError, AttributeError):
+            detail = None
+        if isinstance(detail, dict):
+            code = detail.get("code")
+            message = detail.get("message")
+        elif isinstance(detail, str):
+            message = detail
+
+        if not self._has_key:
+            hint = (
+                "No API key was sent. OBSL requires authentication — set "
+                "obsl.api_key in the spec or OBSL_API_KEY in the environment."
+            )
+        else:
+            hint = (
+                f"The API key sent in the {self._api_key_header!r} header was "
+                "rejected. Check it matches one of the server's API_KEYS."
+            )
+        server = message or (r.text[:200] if r.text else "no detail")
+        label = code or ("auth required" if r.status_code == 401 else "forbidden")
+        return ObslAuthError(
+            f"{r.status_code} {r.reason_phrase} from {r.request.method} "
+            f"{r.request.url}: OBSL rejected the request ({label}: {server}). {hint}",
             request=r.request,
             response=r,
         )

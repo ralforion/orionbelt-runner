@@ -39,7 +39,10 @@ class ObslSpec(BaseModel):
 
     base_url: str = "http://localhost:8080"
     model_id: str | None = None
-    api_token: str | None = None
+    # API key for OBSL >= 2.12 (AUTH_MODE=api_key). Sent in the header named
+    # by ``api_key_header`` (default X-API-Key).
+    api_key: str | None = None
+    api_key_header: str = "X-API-Key"
     timeout_seconds: float = 30.0
     model: ModelSpec | None = None
     locale: str | None = None  # BCP-47, e.g. "de", "en-US"

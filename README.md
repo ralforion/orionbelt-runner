@@ -1,4 +1,20 @@
-# OrionBelt Runner
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ralfbecher/orionbelt-semantic-layer/main/docs/assets/ORIONBELT_Logo.png" alt="OrionBelt logo — a stylized belt of three stars" width="400">
+</p>
+
+<h1 align="center">OrionBelt Runner</h1>
+
+<p align="center"><strong>Run <a href="https://github.com/ralfbecher/orionbelt-semantic-layer">OrionBelt Semantic Layer</a> query batches and emit reports.</strong></p>
+
+[![Version 0.5.0](https://img.shields.io/badge/version-0.5.0-purple.svg)](https://github.com/ralfbecher/orionbelt-runner/releases)
+[![OBSL 2.12.x](https://img.shields.io/badge/OBSL-2.12.x-9cf.svg)](https://github.com/ralfbecher/orionbelt-semantic-layer)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: BSL 1.1](https://img.shields.io/badge/License-BSL_1.1-orange.svg)](LICENSE)
+
+[![Pydantic v2](https://img.shields.io/badge/Pydantic-v2-E92063.svg?logo=pydantic&logoColor=white)](https://docs.pydantic.dev)
+[![Typer](https://img.shields.io/badge/Typer-CLI-009688.svg)](https://typer.tiangolo.com)
+[![WeasyPrint](https://img.shields.io/badge/WeasyPrint-PDF-FF6F00.svg)](https://weasyprint.org)
+[![Ruff](https://img.shields.io/badge/lint-ruff-D7FF64.svg?logo=ruff&logoColor=black)](https://docs.astral.sh/ruff/)
 
 Run [OrionBelt Semantic Layer](https://github.com/ralfbecher/orionbelt-semantic-layer) query batches and emit reports.
 
@@ -12,7 +28,7 @@ Numeric and timestamp cells are pre-rendered server-side using each column's `fo
 
 ## Status
 
-Early scaffold (v0.4.0). Markdown, HTML, and PDF reports, with optional per-query TSV exports and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
+Early scaffold (v0.5.0). Markdown, HTML, and PDF reports, with optional per-query TSV exports and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
 
 ## Install
 
@@ -58,9 +74,46 @@ Or via env (`.env` or shell):
 
 ```bash
 OBSL_BASE_URL=http://my-obsl:8080 \
-OBSL_API_TOKEN=... \
+OBSL_API_KEY=obsl_pat_... \
 uv run orionbelt-runner run examples/monthly-revenue.yaml
 ```
+
+## Authentication
+
+OBSL >= 2.12 supports `AUTH_MODE=api_key` (see the OBSL [authentication
+guide](https://github.com/ralfbecher/orionbelt-semantic-layer/blob/main/docs/guide/authentication.md)).
+When the server enforces auth, give the runner an API key:
+
+```yaml
+obsl:
+  base_url: http://my-obsl:8080
+  api_key: obsl_pat_...        # preferred
+  api_key_header: X-API-Key    # optional; match the server's API_KEY_HEADER
+```
+
+Or via env, which overrides the spec — keep secrets out of YAML:
+
+| Variable | Purpose |
+|----------|---------|
+| `OBSL_API_KEY` | API key. |
+| `OBSL_API_KEY_HEADER` | Header name (default `X-API-Key`). |
+
+The key is sent in the `X-API-Key` header by default (OBSL also accepts
+`Authorization: Bearer`). When auth is off (`AUTH_MODE=none`) the key is
+ignored, so it's safe to leave set. A `401`/`403` from OBSL surfaces as an
+`ObslAuthError` with a hint about which key/header was sent.
+
+## Compatibility & startup preflight
+
+This runner's **0.5.x** line tracks **OBSL 2.12.x**. Before running any query,
+`orionbelt-runner run` calls the unauthenticated `/health` endpoint and checks:
+
+- the server version is in the supported `2.12.x` line (older → upgrade the
+  server; newer → upgrade the runner), and
+- an API key is configured when the server reports `AUTH_MODE=api_key`.
+
+A failed check exits non-zero with `Preflight failed: …` before any session is
+created. Pass `--skip-preflight` to bypass it (e.g. against a custom build).
 
 ## Server expectations
 
@@ -218,4 +271,16 @@ spec.yaml ──▶ load_spec ──▶ Runner ──▶ ObslClient ──▶ OB
 
 ## License
 
-BSL-1.1 (mirrors OrionBelt Semantic Layer).
+Copyright 2025 [RALFORION d.o.o.](https://ralforion.com)
+
+Licensed under the [Business Source License 1.1](LICENSE). The Licensed Work will convert to Apache License 2.0 on 2030-03-16.
+
+For commercial licensing inquiries, contact: licensing@ralforion.com
+
+---
+
+<p align="center">
+  <a href="https://ralforion.com">
+    <img src="https://raw.githubusercontent.com/ralfbecher/orionbelt-semantic-layer/main/docs/assets/RALFORION_doo_Logo.png" alt="RALFORION d.o.o." width="200">
+  </a>
+</p>
