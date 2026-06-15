@@ -329,9 +329,7 @@ class Runner:
             pdf_bytes = render_pdf(report_spec, results, context=ctx)
             out_path.write_bytes(pdf_bytes)
         elif report_spec.format == "html":
-            out_path.write_text(
-                render_html(report_spec, results, context=ctx), encoding="utf-8"
-            )
+            out_path.write_text(render_html(report_spec, results, context=ctx), encoding="utf-8")
         else:
             out_path.write_text(
                 render_markdown(report_spec, results, context=ctx), encoding="utf-8"
@@ -388,9 +386,7 @@ class Runner:
         """
         try:
             ctx = _build_template_context(spec.name, report_basis, tz_name)
-            report_template_path = _resolve_output_path(
-                spec.report.output, ctx, output_dir
-            )
+            report_template_path = _resolve_output_path(spec.report.output, ctx, output_dir)
             runlog_path = _runlog_path_from_report(report_template_path)
 
             run_log = RunLog(
@@ -451,9 +447,7 @@ def _build_template_context(spec_name: str, basis: datetime, tz_name: str) -> di
     }
 
 
-def _resolve_output_path(
-    template: str, ctx: dict[str, Any], output_dir: Path | None
-) -> Path:
+def _resolve_output_path(template: str, ctx: dict[str, Any], output_dir: Path | None) -> Path:
     """Format the report-output template and apply ``--output-dir`` rebasing."""
     out_path = Path(template.format(**ctx))
     if output_dir is not None and not out_path.is_absolute():
