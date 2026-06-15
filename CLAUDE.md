@@ -48,7 +48,9 @@ src/orionbelt_runner/
 
 ## OBSL version compatibility
 
-OBSL exposes `version` and `api_version` on `GET /v1/settings`. The HTTP client should call `settings()` once at startup and surface a clear error if the OBSL version is too old (when we start gating on features). For now we depend on OBSL `>= 2.1.0` (raw mode lands there).
+The runner's minor line is pinned to an OBSL minor series: **0.5.x ↔ OBSL 2.12.x**. `HttpObslClient.preflight()` calls the unauthenticated `GET /health` (which returns the OBSL release `version` and the active `auth_mode`) before any query and raises `ObslVersionError` if the server is outside the supported line, or `ObslPreflightError` if the server enforces `AUTH_MODE=api_key` but no key was configured. The CLI runs preflight automatically (skippable with `--skip-preflight`). The pin lives in `client.py` as `SUPPORTED_OBSL_MAJOR` / `SUPPORTED_OBSL_MINOR` — bump them in lockstep with the runner's minor version.
+
+Note: `GET /v1/settings` also exposes `version` (release) plus `api_version` (the REST prefix, currently `"v1"` — *not* a semver). The runner still reads `settings()` mid-run to capture `version` / `api_version` into the run log, but the version *gate* is the `/health` preflight.
 
 ## Out of scope (for now)
 

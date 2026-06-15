@@ -7,11 +7,12 @@ import sys
 from pathlib import Path
 from typing import Annotated
 
+import httpx
 import structlog
 import typer
 
 from orionbelt_runner import __version__
-from orionbelt_runner.client import HttpObslClient
+from orionbelt_runner.client import HttpObslClient, ObslPreflightError
 from orionbelt_runner.runner import Runner
 from orionbelt_runner.spec import load_spec
 
@@ -34,15 +35,36 @@ def run(
         str | None,
         typer.Option("--base-url", help="Override OBSL base URL (else from spec or env)."),
     ] = None,
+    skip_preflight: Annotated[
+        bool,
+        typer.Option(
+            "--skip-preflight",
+            help="Skip the startup health / version / auth compatibility check.",
+        ),
+    ] = False,
 ) -> None:
     """Execute a run spec end-to-end and write its report."""
     spec = load_spec(spec_path)
 
     base = base_url or os.environ.get("OBSL_BASE_URL") or spec.obsl.base_url
-    token = spec.obsl.api_token or os.environ.get("OBSL_API_TOKEN")
+    # Precedence: spec value first, then env. OBSL_API_KEY matches the env
+    # name used by the OBSL UI / MCP.
+    api_key = spec.obsl.api_key or os.environ.get("OBSL_API_KEY")
+    api_key_header = os.environ.get("OBSL_API_KEY_HEADER") or spec.obsl.api_key_header
     timeout = spec.obsl.timeout_seconds
 
-    with HttpObslClient(base, api_token=token, timeout_seconds=timeout) as client:
+    with HttpObslClient(
+        base,
+        api_key=api_key,
+        api_key_header=api_key_header,
+        timeout_seconds=timeout,
+    ) as client:
+        if not skip_preflight:
+            try:
+                client.check_compatibility()
+            except (ObslPreflightError, httpx.HTTPError) as exc:
+                typer.echo(f"Preflight failed: {exc}", err=True)
+                raise typer.Exit(1) from exc
         runner = Runner(client)
         result = runner.run(spec, output_dir=output_dir)
 
