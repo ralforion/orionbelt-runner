@@ -6,7 +6,7 @@ Guidance for Claude Code working in this repository.
 
 **OrionBelt Runner** runs OBSL query batches and emits reports. A run is a single YAML spec. Output today is markdown; PDF and chart embedding are planned.
 
-This repo **does not vendor OBSL**. All access goes through the public REST API of [orionbelt-semantic-layer](https://github.com/ralfbecher/orionbelt-semantic-layer) via a small `ObslClient` protocol (`src/orionbelt_runner/client.py`). When OBSL changes, only the HTTP client adapter needs to follow.
+This repo **does not vendor OBSL**. All access goes through the public REST API of [orionbelt-semantic-layer](https://github.com/ralforion/orionbelt-semantic-layer) via a small `ObslClient` protocol (`src/orionbelt_runner/client.py`). When OBSL changes, only the HTTP client adapter needs to follow.
 
 ## Commands
 

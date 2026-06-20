@@ -1,13 +1,13 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ralfbecher/orionbelt-semantic-layer/main/docs/assets/ORIONBELT_Logo.png" alt="OrionBelt logo — a stylized belt of three stars" width="400">
+  <img src="https://raw.githubusercontent.com/ralforion/orionbelt-semantic-layer/main/docs/assets/ORIONBELT_Logo.png" alt="OrionBelt logo — a stylized belt of three stars" width="400">
 </p>
 
 <h1 align="center">OrionBelt Runner</h1>
 
-<p align="center"><strong>Run <a href="https://github.com/ralfbecher/orionbelt-semantic-layer">OrionBelt Semantic Layer</a> query batches and emit reports.</strong></p>
+<p align="center"><strong>Run <a href="https://github.com/ralforion/orionbelt-semantic-layer">OrionBelt Semantic Layer</a> query batches and emit reports.</strong></p>
 
-[![Version 0.5.0](https://img.shields.io/badge/version-0.5.0-purple.svg)](https://github.com/ralfbecher/orionbelt-runner/releases)
-[![OBSL 2.12.x](https://img.shields.io/badge/OBSL-2.12.x-9cf.svg)](https://github.com/ralfbecher/orionbelt-semantic-layer)
+[![Version 0.5.0](https://img.shields.io/badge/version-0.5.0-purple.svg)](https://github.com/ralforion/orionbelt-runner/releases)
+[![OBSL 2.12.x](https://img.shields.io/badge/OBSL-2.12.x-9cf.svg)](https://github.com/ralforion/orionbelt-semantic-layer)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL_1.1-orange.svg)](LICENSE)
 
@@ -16,7 +16,7 @@
 [![WeasyPrint](https://img.shields.io/badge/WeasyPrint-PDF-FF6F00.svg)](https://weasyprint.org)
 [![Ruff](https://img.shields.io/badge/lint-ruff-D7FF64.svg?logo=ruff&logoColor=black)](https://docs.astral.sh/ruff/)
 
-Run [OrionBelt Semantic Layer](https://github.com/ralfbecher/orionbelt-semantic-layer) query batches and emit reports.
+Run [OrionBelt Semantic Layer](https://github.com/ralforion/orionbelt-semantic-layer) query batches and emit reports.
 
 A run is a YAML document combining:
 
@@ -81,7 +81,7 @@ uv run orionbelt-runner run examples/monthly-revenue.yaml
 ## Authentication
 
 OBSL >= 2.12 supports `AUTH_MODE=api_key` (see the OBSL [authentication
-guide](https://github.com/ralfbecher/orionbelt-semantic-layer/blob/main/docs/guide/authentication.md)).
+guide](https://github.com/ralforion/orionbelt-semantic-layer/blob/main/docs/guide/authentication.md)).
 When the server enforces auth, give the runner an API key:
 
 ```yaml
@@ -281,6 +281,6 @@ For commercial licensing inquiries, contact: licensing@ralforion.com
 
 <p align="center">
   <a href="https://ralforion.com">
-    <img src="https://raw.githubusercontent.com/ralfbecher/orionbelt-semantic-layer/main/docs/assets/RALFORION_doo_Logo.png" alt="RALFORION d.o.o." width="200">
+    <img src="https://raw.githubusercontent.com/ralforion/orionbelt-semantic-layer/main/docs/assets/RALFORION_doo_Logo.png" alt="RALFORION d.o.o." width="200">
   </a>
 </p>
