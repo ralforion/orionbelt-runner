@@ -1,7 +1,7 @@
 # Vendored OBML schema
 
 `obml-schema.json` is a **vendored copy** of the OBML semantic-model JSON Schema
-from [orionbelt-semantic-layer](https://github.com/ralfbecher/orionbelt-semantic-layer).
+from [orionbelt-semantic-layer](https://github.com/ralforion/orionbelt-semantic-layer).
 It exists only so editors (via `# yaml-language-server: $schema=...`) can validate
 and autocomplete the example model files under `examples/` — it is **not** read at
 runtime. The runner never parses OBML models; it forwards run-specs to OBSL over REST.
