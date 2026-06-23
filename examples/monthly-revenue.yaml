@@ -38,7 +38,7 @@ queries:
       select:
         dimensions: [Nation]
         measures: [Revenue]
-      order_by:
+      orderBy:
         - field: Revenue
           direction: desc
       limit: 20
@@ -53,7 +53,7 @@ queries:
           - Nations.Nation Name
           - Orders.Order Key
           - Orders.Order Total
-      order_by:
+      orderBy:
         - field: Orders.Order Total
           direction: desc
       limit: 50

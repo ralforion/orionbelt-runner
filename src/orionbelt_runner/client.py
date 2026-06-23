@@ -24,11 +24,12 @@ log = structlog.get_logger("orionbelt_runner.client")
 # fallback). Sending it is safe against pre-auth servers — they ignore it.
 DEFAULT_API_KEY_HEADER = "X-API-Key"
 
-# This runner's 0.5.x line tracks the OBSL 2.12 minor series — the API surface
-# (unified auth, the endpoints used here) is pinned to that release. Bump these
-# in lockstep with the runner's own minor version.
+# This runner's 0.6.x line tracks the OBSL 2.16 minor series — the API surface
+# (unified auth, the endpoints used here, and the JSON-Schema ingestion boundary
+# added in 2.16) is pinned to that release. Bump these in lockstep with the
+# runner's own minor version.
 SUPPORTED_OBSL_MAJOR = 2
-SUPPORTED_OBSL_MINOR = 12
+SUPPORTED_OBSL_MINOR = 16
 
 _SEMVER_RE = re.compile(r"\s*v?(\d+)\.(\d+)(?:\.(\d+))?")
 
@@ -39,6 +40,17 @@ class ObslAuthError(httpx.HTTPStatusError):
     A dedicated subclass so callers can distinguish an auth failure from any
     other HTTP error. The message carries OBSL's structured ``{code, message}``
     detail plus a hint about how to supply the key.
+    """
+
+
+class ObslSchemaError(httpx.HTTPStatusError):
+    """OBSL rejected the request body with 422 at its JSON-Schema boundary.
+
+    OBSL >= 2.16 validates model-load and query payloads against the published
+    JSON Schemas at ingestion and returns ``422`` with a structured
+    ``{detail: {message, errors: [{code, message, path}]}}`` body. A dedicated
+    subclass surfaces those per-field errors so a malformed OBML model or query
+    in the spec is diagnosable without reading the raw response.
     """
 
 
@@ -292,7 +304,7 @@ class HttpObslClient:
         Calls the unauthenticated ``/health`` endpoint (which reports the OBSL
         release version and the active auth mode) and then verifies:
 
-        * the server version is in the supported ``2.12.x`` line, and
+        * the server version is in the supported ``2.16.x`` line, and
         * a key is configured when the server enforces ``AUTH_MODE=api_key``.
 
         Returns the ``/health`` payload. Raises :class:`ObslVersionError` or
@@ -455,6 +467,12 @@ class HttpObslClient:
         # secured OBSL >= 2.12 deployment.
         if r.status_code in (401, 403):
             raise self._auth_error(r)
+        # 422 from OBSL >= 2.16 means the request body failed JSON-Schema
+        # validation at the ingestion boundary (a malformed OBML model loaded
+        # by the runner, or a query body in the spec). Translate the structured
+        # per-field errors into a readable message.
+        if r.status_code == 422:
+            raise self._schema_error(r)
         # OBSL returns structured error detail (FastAPI default). Surface it
         # in the exception message so failures are diagnosable from logs.
         body = r.text
@@ -462,6 +480,51 @@ class HttpObslClient:
             body = body[:500] + "…"
         raise httpx.HTTPStatusError(
             f"{r.status_code} {r.reason_phrase} from {r.request.method} {r.request.url}: {body}",
+            request=r.request,
+            response=r,
+        )
+
+    def _schema_error(self, r: httpx.Response) -> ObslSchemaError:
+        """Build an :class:`ObslSchemaError` from a 422 JSON-Schema rejection.
+
+        OBSL >= 2.16 returns ``{detail: {message, errors: [{code, message,
+        path}]}}``. FastAPI's own request validation uses a different shape
+        (``detail`` is a list); both are handled, falling back to the raw body.
+        """
+        message: str | None = None
+        items: list[str] = []
+        try:
+            detail = r.json().get("detail")
+        except (ValueError, AttributeError):
+            detail = None
+
+        if isinstance(detail, dict):
+            message = detail.get("message")
+            errors = detail.get("errors")
+            if isinstance(errors, list):
+                for e in errors:
+                    if not isinstance(e, dict):
+                        continue
+                    path = e.get("path") or "(root)"
+                    items.append(f"{path}: {e.get('message') or e.get('code') or 'invalid'}")
+        elif isinstance(detail, list):
+            # FastAPI request-validation shape: [{loc, msg, ...}, ...].
+            for e in detail:
+                if not isinstance(e, dict):
+                    continue
+                loc = ".".join(str(p) for p in e.get("loc", []) if p != "body") or "(root)"
+                items.append(f"{loc}: {e.get('msg') or 'invalid'}")
+        elif isinstance(detail, str):
+            message = detail
+
+        headline = message or "request body failed JSON-Schema validation"
+        body = "; ".join(items) if items else (r.text[:300] if r.text else "no detail")
+        return ObslSchemaError(
+            f"{r.status_code} {r.reason_phrase} from {r.request.method} "
+            f"{r.request.url}: OBSL rejected the request ({headline}: {body}). "
+            "Check the OBML model / query bodies in the spec against the OBSL "
+            "JSON Schema — OBSL >= 2.16 enforces it (camelCase keys, no string "
+            "version, lowercase enum values).",
             request=r.request,
             response=r,
         )
