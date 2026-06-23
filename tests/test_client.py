@@ -1,4 +1,4 @@
-"""Tests for HttpObslClient auth wiring + error translation (OBSL >= 2.12)."""
+"""Tests for HttpObslClient auth wiring + error translation (OBSL >= 2.16)."""
 
 from __future__ import annotations
 
@@ -11,12 +11,13 @@ from orionbelt_runner.client import (
     HttpObslClient,
     ObslAuthError,
     ObslPreflightError,
+    ObslSchemaError,
     ObslVersionError,
 )
 from orionbelt_runner.spec import ObslSpec
 
 
-def _health(version: str = "2.12.0", auth_mode: str = "none") -> Callable[..., httpx.Response]:
+def _health(version: str = "2.16.0", auth_mode: str = "none") -> Callable[..., httpx.Response]:
     body = {"status": "ok", "version": version, "auth_mode": auth_mode}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -126,14 +127,14 @@ def test_non_auth_error_is_plain_http_error() -> None:
 
 def test_preflight_passes_on_supported_version() -> None:
     client = HttpObslClient("http://obsl.test")
-    _wire(client, _health(version="2.12.3"))
+    _wire(client, _health(version="2.16.3"))
     payload = client.check_compatibility()
-    assert payload["version"] == "2.12.3"
+    assert payload["version"] == "2.16.3"
 
 
 def test_preflight_rejects_too_old_version() -> None:
     client = HttpObslClient("http://obsl.test")
-    _wire(client, _health(version="2.11.0"))
+    _wire(client, _health(version="2.15.0"))
     with pytest.raises(ObslVersionError) as exc:
         client.check_compatibility()
     assert "too old" in str(exc.value)
@@ -141,10 +142,36 @@ def test_preflight_rejects_too_old_version() -> None:
 
 def test_preflight_rejects_too_new_version() -> None:
     client = HttpObslClient("http://obsl.test")
-    _wire(client, _health(version="2.13.0"))
+    _wire(client, _health(version="2.17.0"))
     with pytest.raises(ObslVersionError) as exc:
         client.check_compatibility()
     assert "newer" in str(exc.value)
+
+
+def test_422_schema_error_lists_offending_fields() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            422,
+            json={
+                "detail": {
+                    "message": "Request failed JSON Schema validation.",
+                    "errors": [
+                        {"code": "additional_properties", "message": "order_by not permitted",
+                         "path": "(root)"},
+                    ],
+                }
+            },
+        )
+
+    client = HttpObslClient("http://obsl.test")
+    _wire(client, handler)
+
+    with pytest.raises(ObslSchemaError) as exc:
+        client.health()
+    msg = str(exc.value)
+    assert "JSON Schema validation" in msg
+    assert "order_by not permitted" in msg
+    assert "camelCase" in msg
 
 
 def test_preflight_tolerates_missing_version() -> None:

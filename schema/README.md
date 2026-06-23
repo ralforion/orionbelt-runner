@@ -9,7 +9,7 @@ runtime. The runner never parses OBML models; it forwards run-specs to OBSL over
 ## Provenance
 
 - Source: `schema/obml-schema.json` in orionbelt-semantic-layer
-- OBSL version: **v2.12.0** (matches this runner's supported line, 0.5.x ↔ OBSL 2.12.x)
+- OBSL version: **v2.16.0** (matches this runner's supported line, 0.6.x ↔ OBSL 2.16.x)
 
 ## Re-syncing
 
