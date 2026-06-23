@@ -185,6 +185,7 @@ report:
 | `{tz}` | `Europe/Berlin` | IANA name |
 | `{tz_filename}` / `{timezone}` | `Europe, Berlin` | `/` replaced with `, ` for path safety |
 | `{runner_version}` | `0.4.0` | the OrionBelt Runner version that produced this report |
+| `{duration_ms}` | `1234` | wall-clock run duration in whole milliseconds; best in `intro` / `footer` / `title`, not paths |
 
 `report.footer` additionally accepts result-derived counters: `{number_of_queries}`, `{number_of_sections}`, `{number_of_rows}` (camelCase aliases — `{numberOfQueries}` etc. — also work).
 
