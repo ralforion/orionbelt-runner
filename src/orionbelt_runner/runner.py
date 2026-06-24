@@ -123,11 +123,13 @@ class Runner:
 
         finished_at = datetime.now(tz=UTC)
 
+        duration_ms = (finished_at - started_at).total_seconds() * 1000
+
         report_path: Path | None = None
         exports_dir: Path | None = None
         if results and not errors:
             report_path = self._render_report(
-                spec, results, report_basis, output_dir, tz_name=tz_name
+                spec, results, report_basis, output_dir, tz_name=tz_name, duration_ms=duration_ms
             )
             log.info("report_written", path=str(report_path))
             if spec.report.export_results:
@@ -316,8 +318,9 @@ class Runner:
         output_dir: Path | None,
         *,
         tz_name: str = "UTC",
+        duration_ms: float | None = None,
     ) -> Path:
-        ctx = _build_template_context(spec.name, started_at, tz_name)
+        ctx = _build_template_context(spec.name, started_at, tz_name, duration_ms=duration_ms)
         report_spec = spec.report
         if not report_spec.sections:
             auto = _auto_sections(spec.queries)
@@ -416,13 +419,20 @@ class Runner:
             return None
 
 
-def _build_template_context(spec_name: str, basis: datetime, tz_name: str) -> dict[str, Any]:
+def _build_template_context(
+    spec_name: str, basis: datetime, tz_name: str, *, duration_ms: float | None = None
+) -> dict[str, Any]:
     """Build the ``str.format`` context shared by report + runlog paths.
 
     Single source of truth so the runlog lands next to the report even
     when the report template uses ``{date}`` / ``{time_filename}`` /
     ``{tz_filename}`` placeholders. The TZ resolution mirrors what
     ``_render_report`` did before this was extracted.
+
+    ``duration_ms`` (the wall-clock run duration) is exposed as the
+    ``{duration_ms}`` placeholder — rounded to a whole millisecond — for
+    intro / footer templates. It's ``None`` for path-resolution callers
+    (the run-log writer) that don't have a duration to report.
     """
     try:
         tz = ZoneInfo(tz_name)
@@ -444,6 +454,7 @@ def _build_template_context(spec_name: str, basis: datetime, tz_name: str) -> di
         "tz_filename": tz_filename,
         "timezone": tz_filename,  # alias of tz_filename — friendlier name
         "runner_version": __version__,
+        "duration_ms": round(duration_ms) if duration_ms is not None else None,
     }
 
 
