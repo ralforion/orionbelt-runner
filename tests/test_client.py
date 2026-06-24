@@ -156,8 +156,11 @@ def test_422_schema_error_lists_offending_fields() -> None:
                 "detail": {
                     "message": "Request failed JSON Schema validation.",
                     "errors": [
-                        {"code": "additional_properties", "message": "order_by not permitted",
-                         "path": "(root)"},
+                        {
+                            "code": "additional_properties",
+                            "message": "order_by not permitted",
+                            "path": "(root)",
+                        },
                     ],
                 }
             },
