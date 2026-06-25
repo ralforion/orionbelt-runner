@@ -16,7 +16,7 @@
 [![WeasyPrint](https://img.shields.io/badge/WeasyPrint-PDF-FF6F00.svg)](https://weasyprint.org)
 [![Ruff](https://img.shields.io/badge/lint-ruff-D7FF64.svg?logo=ruff&logoColor=black)](https://docs.astral.sh/ruff/)
 
-[![Docker Hub](https://img.shields.io/docker/v/ralforion/orionbelt-runner?logo=docker&logoColor=white&label=Docker%20Hub&color=2496ED&sort=semver)](https://hub.docker.com/r/ralforion/orionbelt-runner)
+[![Docker Hub](https://img.shields.io/docker/v/ralforion/orionbelt-runner?logo=docker&logoColor=white&label=Docker%20Hub&color=2496ED&sort=semver)](https://hub.docker.com/r/ralforion/orionbelt-runner/tags)
 [![Docker pulls](https://img.shields.io/docker/pulls/ralforion/orionbelt-runner?logo=docker&logoColor=white&color=2496ED)](https://hub.docker.com/r/ralforion/orionbelt-runner)
 [![Image size](https://img.shields.io/docker/image-size/ralforion/orionbelt-runner/latest?logo=docker&logoColor=white&color=2496ED)](https://hub.docker.com/r/ralforion/orionbelt-runner)
 
