@@ -16,6 +16,10 @@
 [![WeasyPrint](https://img.shields.io/badge/WeasyPrint-PDF-FF6F00.svg)](https://weasyprint.org)
 [![Ruff](https://img.shields.io/badge/lint-ruff-D7FF64.svg?logo=ruff&logoColor=black)](https://docs.astral.sh/ruff/)
 
+[![Docker Hub](https://img.shields.io/docker/v/ralforion/orionbelt-runner?logo=docker&logoColor=white&label=Docker%20Hub&color=2496ED&sort=semver)](https://hub.docker.com/r/ralforion/orionbelt-runner)
+[![Docker pulls](https://img.shields.io/docker/pulls/ralforion/orionbelt-runner?logo=docker&logoColor=white&color=2496ED)](https://hub.docker.com/r/ralforion/orionbelt-runner)
+[![Image size](https://img.shields.io/docker/image-size/ralforion/orionbelt-runner/latest?logo=docker&logoColor=white&color=2496ED)](https://hub.docker.com/r/ralforion/orionbelt-runner)
+
 Run [OrionBelt Semantic Layer](https://github.com/ralforion/orionbelt-semantic-layer) query batches and emit reports.
 
 A run is a YAML document combining:
@@ -76,6 +80,42 @@ Or via env (`.env` or shell):
 OBSL_BASE_URL=http://my-obsl:8080 \
 OBSL_API_KEY=obsl_pat_... \
 uv run orionbelt-runner run examples/monthly-revenue.yaml
+```
+
+## Docker
+
+The runner ships as a container image on Docker Hub
+([`ralforion/orionbelt-runner`](https://hub.docker.com/r/ralforion/orionbelt-runner)).
+The `ENTRYPOINT` is the CLI, so arguments go straight through:
+
+```bash
+docker run --rm ralforion/orionbelt-runner version
+```
+
+Mount your specs in and a directory for the reports out. The image works under
+`/work`, so relative paths in the spec resolve there:
+
+```bash
+docker run --rm \
+  -e OBSL_BASE_URL=http://my-obsl:8080 \
+  -e OBSL_API_KEY=obsl_pat_... \
+  -v "$PWD/examples:/work/examples" \
+  -v "$PWD/reports:/work/reports" \
+  ralforion/orionbelt-runner run examples/monthly-revenue.yaml
+```
+
+> When OBSL runs on the host, use `--add-host=host.docker.internal:host-gateway`
+> and `OBSL_BASE_URL=http://host.docker.internal:8080` so the container can
+> reach it.
+
+The image covers markdown / HTML reports. PDF output (WeasyPrint + Pango /
+Cairo system libs) is not bundled — run `--extra pdf` on a host install for
+that.
+
+Build it yourself instead of pulling:
+
+```bash
+docker build -t orionbelt-runner .
 ```
 
 ## Authentication
