@@ -1,0 +1,35 @@
+# Keep the build context small and reproducible — only ship what the image needs.
+.git/
+.github/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Caches
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local config / secrets
+.env
+.claude/
+
+# Tests aren't needed at runtime
+tests/
+
+# Generated reports
+reports/
+*.md.out
+*.pdf
+
+# Editor / OS cruft
+.vscode/
+.idea/
+*.swp
+.DS_Store

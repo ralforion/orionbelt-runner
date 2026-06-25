@@ -3,7 +3,7 @@ name = "orionbelt-runner"
 version = "0.6.0"
 description = "Run OrionBelt Semantic Layer query batches on a schedule and emit reports."
 license = {text = "BSL-1.1"}
-authors = [{name = "Ralf Becher, RALFORION d.o.o.", email = "ralf.becher@web.de"}]
+authors = [{name = "Ralf Becher, RALFORION d.o.o.", email = "info@ralforion.com"}]
 requires-python = ">=3.12"
 readme = "README.md"
 keywords = [
