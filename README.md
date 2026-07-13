@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/ralforion/orionbelt-semantic-layer/main/docs/assets/ORIONBELT_Logo.png" alt="OrionBelt logo — a stylized belt of three stars" width="400">
 </p>
 
-<h1 align="center">OrionBelt Runner</h1>
+<h1 align="center">OrionBelt® Runner</h1>
 
 <p align="center"><strong>Run <a href="https://github.com/ralforion/orionbelt-semantic-layer">OrionBelt Semantic Layer</a> query batches and emit reports.</strong></p>
 
@@ -331,4 +331,9 @@ For commercial licensing inquiries, contact: licensing@ralforion.com
   <a href="https://ralforion.com">
     <img src="https://raw.githubusercontent.com/ralforion/orionbelt-semantic-layer/main/docs/assets/RALFORION_doo_Logo.png" alt="RALFORION d.o.o." width="200">
   </a>
+</p>
+
+<p align="center">
+  Copyright © 2026 RALFORION d.o.o.<br>
+  OrionBelt® is a registered trademark of RALFORION d.o.o.
 </p>
