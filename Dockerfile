@@ -6,7 +6,9 @@
 FROM python:3.14-slim AS build
 
 # uv: fast, reproducible installs. Copied from the official distroless image.
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# Pinned, not :latest — a floating uv would let the tool that installs uv.lock
+# change without a commit, which would undercut the lockfile's guarantee.
+COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
