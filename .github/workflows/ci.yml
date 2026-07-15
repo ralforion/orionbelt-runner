@@ -22,8 +22,10 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
+      # --locked fails if uv.lock has drifted from pyproject.toml, so a
+      # dependency edit without a re-lock is caught here rather than at build.
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev
 
       - name: Lint (ruff)
         run: uv run ruff check src/ tests/
@@ -55,10 +57,10 @@ jobs:
         run: uv python install ${{ matrix.python }}
 
       - name: Install dependencies
-        run: uv sync --extra dev --python ${{ matrix.python }}
+        run: uv sync --locked --extra dev --python ${{ matrix.python }}
 
       - name: Test (pytest)
-        run: uv run --python ${{ matrix.python }} pytest
+        run: uv run --frozen --python ${{ matrix.python }} pytest
 
   # Build the image on every PR so Dockerfile and base-image changes are
   # exercised here rather than first at release time. Never pushes — the

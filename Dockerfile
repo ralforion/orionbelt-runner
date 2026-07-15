@@ -14,18 +14,19 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Install dependencies first (cached layer) using only the manifest, so source
-# edits don't bust the dependency cache. uv.lock is .gitignored, so the build
-# resolves from pyproject.toml rather than requiring a committed lock.
-COPY pyproject.toml README.md ./
+# Install dependencies first (cached layer) using only the manifests, so source
+# edits don't bust the dependency cache. --frozen installs the committed
+# uv.lock as-is: the image gets the exact versions CI tested, and the build
+# never re-resolves (so it can't drift between builds of the same commit).
+COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-install-project --no-dev
+    uv sync --frozen --no-install-project --no-dev
 
 # Now install the project itself. --no-editable copies the package into the
 # venv (rather than linking to /app/src), so the runtime stage needs only .venv.
 COPY src/ ./src/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev --no-editable
+    uv sync --frozen --no-dev --no-editable
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM python:3.14-slim AS runtime
