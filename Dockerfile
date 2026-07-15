@@ -3,7 +3,7 @@
 # ── Build stage ───────────────────────────────────────────────────────────────
 # Resolve dependencies and install the package into a self-contained venv with
 # uv. Kept separate from the runtime image so build tooling never ships.
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 
 # uv: fast, reproducible installs. Copied from the official distroless image.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -28,7 +28,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev --no-editable
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 # Run as a non-root user; reports are written under the working dir.
 RUN useradd --create-home --uid 1000 runner
