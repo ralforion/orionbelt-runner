@@ -13,14 +13,25 @@ updates:
     commit-message:
       prefix: build(deps)
       prefix-development: build(deps-dev)
+    # Grouped by explicit patterns rather than `dependency-type`: inside
+    # `groups`, dependency-type is only supported for bundler, composer, mix,
+    # maven, npm and pip — not uv. A dependency lands in the FIRST group it
+    # matches, so dev tooling must be listed before the catch-all.
     groups:
       # Dev tooling churns often and never ships to users — one PR is enough.
       dev-tools:
-        dependency-type: development
+        patterns:
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "respx"
+          - "types-*"
         update-types: [minor, patch]
-      # Runtime patch/minor bumps travel together; majors get their own PR.
-      runtime-minor:
-        dependency-type: production
+      # Everything else: runtime deps, plus weasyprint — it sits in `dev` but
+      # also backs the `pdf` extra, so it ships to users and belongs here.
+      # Majors are excluded from both groups, so they get their own PR.
+      runtime:
+        patterns: ["*"]
         update-types: [minor, patch]
 
   # Actions pinned in .github/workflows/*.yml
