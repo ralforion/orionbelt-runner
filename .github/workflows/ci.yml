@@ -7,6 +7,8 @@ on:
     branches: [main]
 
 jobs:
+  # Static analysis doesn't vary by interpreter — run it once on the floor
+  # version from requires-python.
   check:
     runs-on: ubuntu-latest
     steps:
@@ -32,5 +34,61 @@ jobs:
       - name: Type check (mypy)
         run: uv run mypy src/
 
+  # Both ends of the supported range: 3.12 is the floor in requires-python,
+  # 3.14 is what the Docker image ships. Keep the top of this matrix in step
+  # with the Dockerfile base image so base-image bumps verify themselves.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python }}
+        run: uv python install ${{ matrix.python }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev --python ${{ matrix.python }}
+
       - name: Test (pytest)
-        run: uv run pytest
+        run: uv run --python ${{ matrix.python }} pytest
+
+  # Build the image on every PR so Dockerfile and base-image changes are
+  # exercised here rather than first at release time. Never pushes — the
+  # publish workflow remains the only thing that writes to Docker Hub.
+  #
+  # This covers setup-buildx-action and build-push-action. login-action needs
+  # secrets (unavailable to fork PRs), and metadata-action's semver tags need a
+  # tag ref, so both stay release-only by nature.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: orionbelt-runner:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Proves the entrypoint resolves and every runtime dep imports under the
+      # base image's interpreter — a build alone won't catch that.
+      - name: Smoke test
+        run: |
+          docker run --rm orionbelt-runner:ci version
+          docker run --rm --entrypoint python orionbelt-runner:ci -c \
+            "import pydantic, httpx, ruamel.yaml, typer, structlog, markdown, orionbelt_runner"
