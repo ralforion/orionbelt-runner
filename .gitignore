@@ -29,9 +29,6 @@ htmlcov/
 # Claude Code local settings
 .claude/settings.local.json
 
-# uv
-uv.lock
-
 # Generated reports (per default output paths)
 reports/
 *.md.out
