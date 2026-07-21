@@ -6,8 +6,8 @@
 
 <p align="center"><strong>Run <a href="https://github.com/ralforion/orionbelt-semantic-layer">OrionBelt Semantic Layer</a> query batches and emit reports.</strong></p>
 
-[![Version 0.6.0](https://img.shields.io/badge/version-0.6.0-purple.svg)](https://github.com/ralforion/orionbelt-runner/releases)
-[![OBSL 2.16.x](https://img.shields.io/badge/OBSL-2.16.x-9cf.svg)](https://github.com/ralforion/orionbelt-semantic-layer)
+[![Version 0.7.0](https://img.shields.io/badge/version-0.7.0-purple.svg)](https://github.com/ralforion/orionbelt-runner/releases)
+[![OBSL 2.23.x](https://img.shields.io/badge/OBSL-2.23.x-9cf.svg)](https://github.com/ralforion/orionbelt-semantic-layer)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL_1.1-orange.svg)](LICENSE)
 
@@ -32,7 +32,7 @@ Numeric and timestamp cells are pre-rendered server-side using each column's `fo
 
 ## Status
 
-Early scaffold (v0.6.0). Markdown, HTML, and PDF reports, with optional per-query TSV exports and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
+Early scaffold (v0.7.0). Markdown, HTML, and PDF reports, with optional per-query TSV exports and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
 
 ## Install
 
@@ -145,10 +145,10 @@ ignored, so it's safe to leave set. A `401`/`403` from OBSL surfaces as an
 
 ## Compatibility & startup preflight
 
-This runner's **0.6.x** line tracks **OBSL 2.16.x**. Before running any query,
+This runner's **0.7.x** line tracks **OBSL 2.23.x**. Before running any query,
 `orionbelt-runner run` calls the unauthenticated `/health` endpoint and checks:
 
-- the server version is in the supported `2.16.x` line (older → upgrade the
+- the server version is in the supported `2.23.x` line (older → upgrade the
   server; newer → upgrade the runner), and
 - an API key is configured when the server reports `AUTH_MODE=api_key`.
 
