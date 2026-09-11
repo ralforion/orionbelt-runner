@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Run <a href="https://github.com/ralforion/orionbelt-semantic-layer">OrionBelt Semantic Layer</a> query batches and emit reports.</strong></p>
 
-[![Latest version](https://img.shields.io/github/v/tag/ralforion/orionbelt-runner?sort=semver&label=version&color=purple)](https://github.com/ralforion/orionbelt-runner/releases/latest)
+[![Latest version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fpypi.org%2Fpypi%2Forionbelt-runner%2Fjson&query=%24.info.version&label=version&color=purple)](https://github.com/ralforion/orionbelt-runner/releases/latest)
 [![OBSL 2.25.x](https://img.shields.io/badge/OBSL-2.25.x-9cf.svg)](https://github.com/ralforion/orionbelt-semantic-layer)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-orange.svg)](LICENSE)
