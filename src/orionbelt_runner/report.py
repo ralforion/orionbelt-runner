@@ -107,7 +107,7 @@ def _table_header(columns: list[ColumnMetadata]) -> str:
     Python-Markdown's ``tables`` extension emits ``text-align: right`` on
     the rendered ``<th>`` / ``<td>`` when the separator is ``---:``.
     """
-    header = "| " + " | ".join(c.name for c in columns) + " |"
+    header = "| " + " | ".join(_format_cell(c.name) for c in columns) + " |"
     sep = "| " + " | ".join(_align_marker(c) for c in columns) + " |"
     return f"{header}\n{sep}"
 
@@ -128,10 +128,58 @@ def _format_row(row: list[Any]) -> str:
     return "| " + " | ".join(_format_cell(c) for c in row) + " |"
 
 
+# Cell values and column names are warehouse data, not text the spec author
+# wrote, so nothing in them may become markup: the markdown report is itself
+# rendered by whatever opens it, and the HTML and PDF reports are built from
+# it. Markdown syntax comes in two kinds, and ``_format_cell`` handles both.
+#
+# Inline syntax is live anywhere in a value. ``<`` opens every HTML tag and
+# autolink (script in the HTML report, a fetch for the PDF); ``[`` and ``]``
+# every link and image; ``*`` and ``_`` emphasis, and a rule when repeated;
+# backticks a code span, inside which the other escapes would print
+# literally. ``|`` would split the table cell and a line break end the row.
+# The backslash is escaped too, or a value ending in ``\`` would cancel the
+# escape placed after it — ``str.translate`` is a single pass, so the
+# backslashes it inserts are never re-escaped.
+_INLINE_ESCAPES = str.maketrans(
+    {
+        "\\": "\\\\",
+        "`": "\\`",
+        "[": "\\[",
+        "]": "\\]",
+        "*": "\\*",
+        "_": "\\_",
+        "|": "\\|",
+        "<": "&lt;",
+        "\n": " ",
+        "\r": " ",
+    }
+)
+
+# Block syntax is live only at the start of a line, which a value reaches as
+# a list item (``- {value}``): a heading, a quote, a nested list, a rule.
+# Only a marker that would act as one is escaped, so ``-5,00`` and ``+49 30``
+# stay readable in the markdown report; ``*`` and ``_`` are already escaped
+# above. The ordered-list marker is escaped at its dot, as ``1\. Quartal``.
+_BLOCK_MARKER = re.compile(r"^(?=[#>]|[-+](?:[\s+-]|$))")
+_ORDERED_MARKER = re.compile(r"^(\d+)(?=\.(?:\s|$))")
+
+# Only an ``&`` that already reads as an entity needs escaping, so a value
+# ``&lt;`` shows as those four characters. A bare one (``R&D``) is left
+# alone — Python-Markdown escapes it itself, and the markdown report stays
+# readable. Mirrors Python-Markdown's own entity pattern.
+_ENTITY_AMP = re.compile(r"&(?=#[0-9]+;|#[xX][0-9a-fA-F]+;|[A-Za-z0-9]+;)")
+
+
 def _format_cell(value: Any) -> str:
     if value is None:
         return ""
-    return str(value).replace("|", "\\|").replace("\n", " ")
+    # Surrounding whitespace goes: HTML collapses it anyway, and kept, four
+    # leading spaces would open a code block in a list item and a leading or
+    # trailing space would stop ``**…**`` from bolding a value.
+    text = _ENTITY_AMP.sub("&amp;", str(value).strip()).translate(_INLINE_ESCAPES)
+    text = _BLOCK_MARKER.sub(r"\\", text, count=1)
+    return _ORDERED_MARKER.sub(r"\1\\", text, count=1)
 
 
 def _render_value(result: ExecuteResult, column: str | int | None) -> str:
@@ -139,7 +187,9 @@ def _render_value(result: ExecuteResult, column: str | int | None) -> str:
         return "_No rows._"
     idx = _resolve_column_index(result, column, prefer_numeric=True)
     cell = result.rows[0][idx] if idx is not None else result.rows[0][0]
-    return f"**{_format_cell(cell)}**"
+    text = _format_cell(cell)
+    # An empty value would leave ``****``, which markdown reads as a rule.
+    return f"**{text}**" if text else ""
 
 
 def _render_list(result: ExecuteResult, column: str | int | None) -> str:
@@ -210,6 +260,7 @@ def render_pdf(
     """
     try:
         from weasyprint import HTML  # type: ignore[import-untyped]
+        from weasyprint.urls import URLFetcher  # type: ignore[import-untyped]
     except ImportError as exc:  # pragma: no cover — exercised by docs / install path
         raise RuntimeError(
             "PDF output requires WeasyPrint. Install the PDF extra with "
@@ -218,11 +269,21 @@ def render_pdf(
             "https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation"
         ) from exc
 
+    # The document is self-contained, so it has nothing legitimate to fetch.
+    # WeasyPrint's default fetcher would follow any ``<img>`` / ``url()`` it
+    # met, from inside whatever network the runner sits in; refusing every
+    # fetch keeps a URL that reached the HTML — from a spec, or data that got
+    # past ``_format_cell`` — from turning a render into a request. WeasyPrint
+    # logs the refusal and renders on without the resource.
+    class _NoFetch(URLFetcher):  # type: ignore[misc]
+        def fetch(self, url: str, headers: Any = None) -> Any:
+            raise ValueError(f"report PDFs load no external resources: {url}")
+
     print_css = _print_css(spec.pdf_page_size, spec.pdf_orientation)
     html_doc = render_html(spec, results, context=context, extra_css=print_css)
     # WeasyPrint is untyped, so write_pdf() comes back as Any — cast back
     # to bytes (write_pdf(target=None) is documented to return bytes).
-    pdf_bytes: bytes = HTML(string=html_doc).write_pdf()
+    pdf_bytes: bytes = HTML(string=html_doc, url_fetcher=_NoFetch()).write_pdf()
     return pdf_bytes
 
 
