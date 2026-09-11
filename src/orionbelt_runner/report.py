@@ -129,27 +129,40 @@ def _format_row(row: list[Any]) -> str:
 
 
 # Cell values and column names are warehouse data, not text the spec author
-# wrote, so nothing in them may become markup. Markdown passes inline HTML
-# through and turns ``[text](url)`` / ``![alt](url)`` into links and images,
-# so an unescaped value would run as script in the HTML report and be fetched
-# by WeasyPrint for the PDF. ``<`` opens every HTML tag and autolink; ``[`` and
-# ``]`` every link and image; backticks would make the other escapes print
-# literally inside a code span; line breaks would end the table row. The
-# backslash is escaped too, or a value ending in ``\`` would cancel the escape
-# placed after it — ``str.translate`` is a single pass, so the backslashes it
-# inserts are never re-escaped.
-_CELL_ESCAPES = str.maketrans(
+# wrote, so nothing in them may become markup: the markdown report is itself
+# rendered by whatever opens it, and the HTML and PDF reports are built from
+# it. Markdown syntax comes in two kinds, and ``_format_cell`` handles both.
+#
+# Inline syntax is live anywhere in a value. ``<`` opens every HTML tag and
+# autolink (script in the HTML report, a fetch for the PDF); ``[`` and ``]``
+# every link and image; ``*`` and ``_`` emphasis, and a rule when repeated;
+# backticks a code span, inside which the other escapes would print
+# literally. ``|`` would split the table cell and a line break end the row.
+# The backslash is escaped too, or a value ending in ``\`` would cancel the
+# escape placed after it — ``str.translate`` is a single pass, so the
+# backslashes it inserts are never re-escaped.
+_INLINE_ESCAPES = str.maketrans(
     {
         "\\": "\\\\",
         "`": "\\`",
         "[": "\\[",
         "]": "\\]",
+        "*": "\\*",
+        "_": "\\_",
         "|": "\\|",
         "<": "&lt;",
         "\n": " ",
         "\r": " ",
     }
 )
+
+# Block syntax is live only at the start of a line, which a value reaches as
+# a list item (``- {value}``): a heading, a quote, a nested list, a rule.
+# Only a marker that would act as one is escaped, so ``-5,00`` and ``+49 30``
+# stay readable in the markdown report; ``*`` and ``_`` are already escaped
+# above. The ordered-list marker is escaped at its dot, as ``1\. Quartal``.
+_BLOCK_MARKER = re.compile(r"^(?=[#>]|[-+](?:[\s+-]|$))")
+_ORDERED_MARKER = re.compile(r"^(\d+)(?=\.(?:\s|$))")
 
 # Only an ``&`` that already reads as an entity needs escaping, so a value
 # ``&lt;`` shows as those four characters. A bare one (``R&D``) is left
@@ -161,7 +174,12 @@ _ENTITY_AMP = re.compile(r"&(?=#[0-9]+;|#[xX][0-9a-fA-F]+;|[A-Za-z0-9]+;)")
 def _format_cell(value: Any) -> str:
     if value is None:
         return ""
-    return _ENTITY_AMP.sub("&amp;", str(value)).translate(_CELL_ESCAPES)
+    # Surrounding whitespace goes: HTML collapses it anyway, and kept, four
+    # leading spaces would open a code block in a list item and a leading or
+    # trailing space would stop ``**…**`` from bolding a value.
+    text = _ENTITY_AMP.sub("&amp;", str(value).strip()).translate(_INLINE_ESCAPES)
+    text = _BLOCK_MARKER.sub(r"\\", text, count=1)
+    return _ORDERED_MARKER.sub(r"\1\\", text, count=1)
 
 
 def _render_value(result: ExecuteResult, column: str | int | None) -> str:
@@ -169,7 +187,9 @@ def _render_value(result: ExecuteResult, column: str | int | None) -> str:
         return "_No rows._"
     idx = _resolve_column_index(result, column, prefer_numeric=True)
     cell = result.rows[0][idx] if idx is not None else result.rows[0][0]
-    return f"**{_format_cell(cell)}**"
+    text = _format_cell(cell)
+    # An empty value would leave ``****``, which markdown reads as a rule.
+    return f"**{text}**" if text else ""
 
 
 def _render_list(result: ExecuteResult, column: str | int | None) -> str:
