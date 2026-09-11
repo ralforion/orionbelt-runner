@@ -90,7 +90,7 @@ uv run --no-sync python scripts/third_party_notices.py
 | typer | 0.27.2 | MIT | yes |
 | typing-extensions | 4.16.0 | PSF-2.0 | yes |
 | typing-inspection | 0.4.4 | MIT | yes |
-| weasyprint | 69.0 | BSD License | yes |
+| weasyprint | 70.0 | BSD License | yes |
 | webencodings | 0.6.1 | BSD-3-Clause | yes |
 | zopfli | 0.4.3 | Apache Software License | yes |
 
@@ -7169,7 +7169,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### weasyprint 69.0
+### weasyprint 70.0
 
 *LICENSE*
 
