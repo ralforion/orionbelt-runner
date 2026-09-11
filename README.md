@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Run <a href="https://github.com/ralforion/orionbelt-semantic-layer">OrionBelt Semantic Layer</a> query batches and emit reports.</strong></p>
 
-[![Version 0.9.0](https://img.shields.io/badge/version-0.9.0-purple.svg)](https://github.com/ralforion/orionbelt-runner/releases)
+[![Latest release](https://img.shields.io/github/v/release/ralforion/orionbelt-runner?sort=semver&label=version&color=purple)](https://github.com/ralforion/orionbelt-runner/releases)
 [![OBSL 2.25.x](https://img.shields.io/badge/OBSL-2.25.x-9cf.svg)](https://github.com/ralforion/orionbelt-semantic-layer)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-orange.svg)](LICENSE)
@@ -33,7 +33,7 @@ Numeric and timestamp cells are pre-rendered server-side using each column's `fo
 
 ## Status
 
-Early scaffold (v0.9.0). Markdown, HTML, and PDF reports, per-query data exports (Parquet / Arrow / TSV, to a folder or S3), and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
+Early scaffold. Markdown, HTML, and PDF reports, per-query data exports (Parquet / Arrow / TSV, to a folder or S3), and an always-on YAML run log sidecar. No scheduler yet — drive it from cron / systemd / GitHub Actions / Cloud Scheduler / etc.
 
 ## Install
 
