@@ -623,8 +623,8 @@ requires-dist = [
     { name = "structlog", specifier = ">=24.1" },
     { name = "typer", specifier = ">=0.12" },
     { name = "types-markdown", marker = "extra == 'dev'", specifier = ">=3.6" },
-    { name = "weasyprint", marker = "extra == 'dev'", specifier = ">=62" },
-    { name = "weasyprint", marker = "extra == 'pdf'", specifier = ">=62" },
+    { name = "weasyprint", marker = "extra == 'dev'", specifier = ">=68" },
+    { name = "weasyprint", marker = "extra == 'pdf'", specifier = ">=68" },
 ]
 provides-extras = ["pdf", "arrow", "dev"]
 

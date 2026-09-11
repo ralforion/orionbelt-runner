@@ -7,7 +7,12 @@ green for installs that don't pull in the ``pdf`` extra.
 
 from __future__ import annotations
 
+import logging
+import threading
+from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -188,6 +193,74 @@ def test_runner_writes_pdf_report(tmp_path: Path) -> None:
     assert result.runlog_path is not None
     assert result.runlog_path.name.endswith(".run.yaml")
     assert result.runlog_path.stem.removesuffix(".run") == result.report_path.stem
+
+
+@pytest.fixture
+def listener() -> Iterator[tuple[str, list[str]]]:
+    """A loopback HTTP server that records every path requested of it."""
+    hits: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+            hits.append(self.path)
+            self.send_response(404)
+            self.end_headers()
+
+        def log_message(self, *args: Any) -> None:  # keep pytest output clean
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}", hits
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_render_pdf_fetches_nothing(listener: tuple[str, list[str]]) -> None:
+    """A URL that reaches the HTML must not turn the render into a request.
+
+    Cell values are escaped before they get that far; the spec is trusted and
+    is not, so its intro and footer are how this reaches WeasyPrint at all.
+    Refusing every fetch covers both — the runner is often deployed next to
+    internal services and a cloud metadata endpoint.
+    """
+    from orionbelt_runner.spec import ReportSection, ReportSpec
+
+    url, hits = listener
+    spec = ReportSpec(
+        format="pdf",
+        output="r.pdf",
+        title="Fetch",
+        intro=f'<img src="{url}/intro-img"> <div style="background: url({url}/intro-css)">x</div>',
+        footer=f"![x]({url}/footer-img)",
+        sections=[ReportSection(heading="By country", query="by_country", render="table")],
+    )
+    results = {
+        "by_country": ExecuteResult(
+            sql="SELECT 1",
+            dialect="postgres",
+            columns=["Country"],
+            rows=[[f'<img src="{url}/cell-img">'], [f"![x]({url}/cell-md)"]],
+            row_count=2,
+        ),
+    }
+
+    data = render_pdf(spec, results)
+
+    assert data.startswith(b"%PDF-")
+    assert hits == []
+
+
+def test_render_pdf_needs_no_fetch_for_its_own_document(caplog: pytest.LogCaptureFixture) -> None:
+    """Refusing fetches costs the report nothing: WeasyPrint logs every failed
+    load with the fetcher's reason, and the self-contained document triggers
+    none."""
+    with caplog.at_level(logging.WARNING, logger="weasyprint"):
+        render_pdf(_spec(), _results(), context={"date": "2026-05-04"})
+    refused = [r.getMessage() for r in caplog.records if "no external resources" in r.getMessage()]
+    assert refused == []
 
 
 def _as_protocol(c: FakeObslClient) -> ObslClient:

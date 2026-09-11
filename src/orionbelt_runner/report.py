@@ -107,7 +107,7 @@ def _table_header(columns: list[ColumnMetadata]) -> str:
     Python-Markdown's ``tables`` extension emits ``text-align: right`` on
     the rendered ``<th>`` / ``<td>`` when the separator is ``---:``.
     """
-    header = "| " + " | ".join(c.name for c in columns) + " |"
+    header = "| " + " | ".join(_format_cell(c.name) for c in columns) + " |"
     sep = "| " + " | ".join(_align_marker(c) for c in columns) + " |"
     return f"{header}\n{sep}"
 
@@ -128,10 +128,40 @@ def _format_row(row: list[Any]) -> str:
     return "| " + " | ".join(_format_cell(c) for c in row) + " |"
 
 
+# Cell values and column names are warehouse data, not text the spec author
+# wrote, so nothing in them may become markup. Markdown passes inline HTML
+# through and turns ``[text](url)`` / ``![alt](url)`` into links and images,
+# so an unescaped value would run as script in the HTML report and be fetched
+# by WeasyPrint for the PDF. ``<`` opens every HTML tag and autolink; ``[`` and
+# ``]`` every link and image; backticks would make the other escapes print
+# literally inside a code span; line breaks would end the table row. The
+# backslash is escaped too, or a value ending in ``\`` would cancel the escape
+# placed after it — ``str.translate`` is a single pass, so the backslashes it
+# inserts are never re-escaped.
+_CELL_ESCAPES = str.maketrans(
+    {
+        "\\": "\\\\",
+        "`": "\\`",
+        "[": "\\[",
+        "]": "\\]",
+        "|": "\\|",
+        "<": "&lt;",
+        "\n": " ",
+        "\r": " ",
+    }
+)
+
+# Only an ``&`` that already reads as an entity needs escaping, so a value
+# ``&lt;`` shows as those four characters. A bare one (``R&D``) is left
+# alone — Python-Markdown escapes it itself, and the markdown report stays
+# readable. Mirrors Python-Markdown's own entity pattern.
+_ENTITY_AMP = re.compile(r"&(?=#[0-9]+;|#[xX][0-9a-fA-F]+;|[A-Za-z0-9]+;)")
+
+
 def _format_cell(value: Any) -> str:
     if value is None:
         return ""
-    return str(value).replace("|", "\\|").replace("\n", " ")
+    return _ENTITY_AMP.sub("&amp;", str(value)).translate(_CELL_ESCAPES)
 
 
 def _render_value(result: ExecuteResult, column: str | int | None) -> str:
@@ -210,6 +240,7 @@ def render_pdf(
     """
     try:
         from weasyprint import HTML  # type: ignore[import-untyped]
+        from weasyprint.urls import URLFetcher  # type: ignore[import-untyped]
     except ImportError as exc:  # pragma: no cover — exercised by docs / install path
         raise RuntimeError(
             "PDF output requires WeasyPrint. Install the PDF extra with "
@@ -218,11 +249,21 @@ def render_pdf(
             "https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation"
         ) from exc
 
+    # The document is self-contained, so it has nothing legitimate to fetch.
+    # WeasyPrint's default fetcher would follow any ``<img>`` / ``url()`` it
+    # met, from inside whatever network the runner sits in; refusing every
+    # fetch keeps a URL that reached the HTML — from a spec, or data that got
+    # past ``_format_cell`` — from turning a render into a request. WeasyPrint
+    # logs the refusal and renders on without the resource.
+    class _NoFetch(URLFetcher):  # type: ignore[misc]
+        def fetch(self, url: str, headers: Any = None) -> Any:
+            raise ValueError(f"report PDFs load no external resources: {url}")
+
     print_css = _print_css(spec.pdf_page_size, spec.pdf_orientation)
     html_doc = render_html(spec, results, context=context, extra_css=print_css)
     # WeasyPrint is untyped, so write_pdf() comes back as Any — cast back
     # to bytes (write_pdf(target=None) is documented to return bytes).
-    pdf_bytes: bytes = HTML(string=html_doc).write_pdf()
+    pdf_bytes: bytes = HTML(string=html_doc, url_fetcher=_NoFetch()).write_pdf()
     return pdf_bytes
 
 

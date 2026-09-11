@@ -146,6 +146,33 @@ def test_run_against_the_stub_writes_report_and_typed_parquet(
     assert "sampled_result" in result.runlog_path.read_text(encoding="utf-8")
 
 
+def test_html_report_shows_markup_in_results_as_text(
+    tmp_path: Path, stub_client: HttpObslClient, obsl_stub: StubObsl
+) -> None:
+    """Result cells are warehouse data: whoever can write a row writes the report.
+
+    A value that looks like HTML or a markdown image must reach the reader as
+    text, not as a script to run or a URL for the renderer to fetch.
+    """
+    obsl_stub.formatted_rows = [
+        ["<script>alert(1)</script>", "5.000,50", "29.04.2026"],
+        ["![x](http://169.254.169.254/latest/meta-data/)", "7.345,25", "30.04.2026"],
+    ]
+    spec = _spec(tmp_path, "http://obsl.test").model_copy(
+        update={"report": ReportSpec(format="html", output=str(tmp_path / "r.html"), title="T")}
+    )
+
+    result = Runner(stub_client).run(spec)
+
+    assert result.succeeded
+    assert result.report_path is not None
+    html = result.report_path.read_text(encoding="utf-8")
+    assert "<script" not in html
+    assert "<img" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+    assert "![x](http://169.254.169.254/latest/meta-data/)" in html
+
+
 def test_run_survives_a_server_without_the_arrow_transport(
     tmp_path: Path, stub_client: HttpObslClient, obsl_stub: StubObsl
 ) -> None:

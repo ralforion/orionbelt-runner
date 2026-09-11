@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from html.parser import HTMLParser
+
+import pytest
+
 from orionbelt_runner.client import ColumnMetadata, ExecuteResult
 from orionbelt_runner.report import render_html, render_markdown
 from orionbelt_runner.spec import ReportSection, ReportSpec
@@ -127,3 +131,113 @@ def test_render_html_escapes_head_title() -> None:
     )
     html = render_html(spec, {}, context={"date": "2026-05-04"})
     assert "<title>Q1 &quot;Revenue&quot; &amp; &lt;growth&gt; — 2026-05-04</title>" in html
+
+
+class _Body(HTMLParser):
+    """Collect the tags in ``<body>`` and the text of each cell, value and item."""
+
+    _TEXT_TAGS = frozenset({"th", "td", "strong", "li"})
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.tags: list[str] = []
+        self.texts: dict[str, list[str]] = {t: [] for t in self._TEXT_TAGS}
+        self._in_body = False
+        self._open: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "body":
+            self._in_body = True
+        elif self._in_body:
+            self.tags.append(tag)
+        if tag in self._TEXT_TAGS:
+            self._open.append(tag)
+            self.texts[tag].append("")
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._open and self._open[-1] == tag:
+            self._open.pop()
+
+    def handle_data(self, data: str) -> None:
+        if self._open:
+            self.texts[self._open[-1]][-1] += data
+
+
+# Values a warehouse can hold that markdown would otherwise read as markup.
+HOSTILE_VALUES = [
+    "<script>alert(1)</script>",
+    '<img src="http://169.254.169.254/latest/meta-data/">',
+    "<http://169.254.169.254/>",
+    "![x](http://169.254.169.254/latest/meta-data/)",
+    "[click](javascript:alert(1))",
+    # Pre-escaped brackets: without escaping the backslash as well, each
+    # inserted escape would pair with the existing one and re-open the link.
+    "\\[click\\](javascript:alert(1))",
+    "`<b>not code</b>`",
+    "R&D &amp; &lt;b&gt; &#60;",
+    "a | b \\| c",
+]
+
+# Everything the report's own structure emits; a value that adds a tag broke out.
+REPORT_TAGS = frozenset(
+    {"h1", "h2", "p", "table", "thead", "tbody", "tr", "th", "td", "strong", "ul", "li"}
+)
+
+
+@pytest.mark.parametrize("value", HOSTILE_VALUES)
+def test_query_values_render_as_text_not_markup(value: str) -> None:
+    """A cell, value or list item shows its data verbatim and adds no markup.
+
+    Query results are warehouse data, so anyone who can write a row can put
+    text in a report — unlike the spec, which the operator writes.
+    """
+    spec = ReportSpec(
+        format="html",
+        output="r.html",
+        title="Hostile",
+        sections=[
+            ReportSection(heading="Table", query="q", render="table"),
+            ReportSection(heading="Value", query="q", render="value", value_column="Name"),
+            ReportSection(heading="List", query="q", render="list", list_column="Name"),
+        ],
+    )
+    results = {
+        "q": ExecuteResult(
+            sql="SELECT 1",
+            dialect="postgres",
+            columns=[ColumnMetadata(name=value, type="string"), "Name"],
+            rows=[[value, value]],
+            row_count=1,
+        ),
+    }
+
+    body = _Body()
+    body.feed(render_html(spec, results))
+
+    assert set(body.tags) <= REPORT_TAGS, body.tags
+    assert body.texts["th"][0] == value  # column names are data too
+    assert body.texts["td"] == [value, value]
+    assert body.texts["strong"] == [value]
+    assert body.texts["li"] == [value]
+
+
+def test_query_values_stay_inert_in_the_markdown_report() -> None:
+    """The .md file is rendered by other viewers, so it must not carry live HTML."""
+    spec = ReportSpec(
+        output="r.md",
+        title="Hostile",
+        sections=[ReportSection(heading="Table", query="q", render="table")],
+    )
+    results = {
+        "q": ExecuteResult(
+            sql="SELECT 1",
+            dialect="postgres",
+            columns=["Name"],
+            rows=[["<script>alert(1)</script> ![x](http://example.test/) R&D"]],
+            row_count=1,
+        ),
+    }
+
+    md = render_markdown(spec, results)
+
+    assert "| &lt;script>alert(1)&lt;/script> !\\[x\\](http://example.test/) R&D |" in md

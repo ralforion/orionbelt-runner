@@ -31,7 +31,7 @@ orionbelt-runner = "orionbelt_runner.cli:main"
 # install target has — markdown / HTML reports stay zero-friction.
 # Install with: uv sync --extra pdf  (or: pip install orionbelt-runner[pdf])
 pdf = [
-    "weasyprint>=62",
+    "weasyprint>=68",  # URLFetcher, which render_pdf subclasses
 ]
 # Parquet / Arrow data exports, plus S3 (and S3-compatible) destinations via
 # pyarrow.fs — one dependency covers both the file formats and the object
@@ -48,7 +48,7 @@ dev = [
     "mypy>=1.10",
     "respx>=0.21",
     "types-Markdown>=3.6",
-    "weasyprint>=62",
+    "weasyprint>=68",  # URLFetcher, which render_pdf subclasses
     "pyarrow>=16",
 ]
 
