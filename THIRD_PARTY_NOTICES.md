@@ -70,7 +70,7 @@ uv run --no-sync python scripts/third_party_notices.py
 | httpcore | 1.0.9 | BSD-3-Clause | yes |
 | httpx | 0.28.1 | BSD License | yes |
 | idna | 3.19 | BSD-3-Clause | yes |
-| markdown | 3.10.3 | BSD-3-Clause | yes |
+| markdown | 3.11 | BSD-3-Clause | yes |
 | markdown-it-py | 4.2.0 | MIT License | yes |
 | mdurl | 0.1.2 | MIT License | yes |
 | pillow | 12.3.0 | MIT-CMU | yes |
@@ -891,7 +891,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### markdown 3.10.3
+### markdown 3.11
 
 *LICENSE.md*
 
