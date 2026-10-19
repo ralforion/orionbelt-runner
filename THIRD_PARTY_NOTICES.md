@@ -70,14 +70,14 @@ uv run --no-sync python scripts/third_party_notices.py
 | httpcore | 1.0.9 | BSD-3-Clause | yes |
 | httpx | 0.28.1 | BSD License | yes |
 | idna | 3.19 | BSD-3-Clause | yes |
-| markdown | 3.11 | BSD-3-Clause | yes |
+| markdown | 3.11.1 | BSD-3-Clause | yes |
 | markdown-it-py | 4.2.0 | MIT License | yes |
 | mdurl | 0.1.2 | MIT License | yes |
 | pillow | 12.3.0 | MIT-CMU | yes |
 | pyarrow | 26.0.0 | Apache-2.0 | yes |
 | pycparser | 3.0 | BSD-3-Clause | yes |
-| pydantic | 2.14.0 | MIT | yes |
-| pydantic-core | 2.50.0 | MIT | yes |
+| pydantic | 2.14.1 | MIT | yes |
+| pydantic-core | 2.50.1 | MIT | yes |
 | pydyf | 0.12.1 | BSD License | yes |
 | pygments | 2.21.0 | BSD-2-Clause | yes |
 | pyphen | 0.18.1 | GNU General Public License v2 or later (GPLv2+) OR GNU Lesser General Public License v2 or later (LGPLv2+) OR Mozilla Public License 1.1 (MPL 1.1) ⚠️ | yes |
@@ -891,7 +891,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### markdown 3.11
+### markdown 3.11.1
 
 *LICENSE.md*
 
@@ -4833,7 +4833,7 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### pydantic 2.14.0
+### pydantic 2.14.1
 
 *LICENSE*
 
@@ -4861,7 +4861,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### pydantic-core 2.50.0
+### pydantic-core 2.50.1
 
 *LICENSE*
 
