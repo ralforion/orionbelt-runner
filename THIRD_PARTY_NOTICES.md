@@ -61,7 +61,7 @@ uv run --no-sync python scripts/third_party_notices.py
 | annotated-doc | 0.0.5 | MIT | yes |
 | annotated-types | 0.8.0 | MIT | yes |
 | anyio | 4.14.2 | MIT | yes |
-| brotli | 1.2.0 | MIT | yes |
+| brotli | 1.2.1 | MIT | yes |
 | certifi | 2026.7.22 | Mozilla Public License 2.0 (MPL 2.0) ⚠️ | yes |
 | cffi | 2.1.1 | MIT-0 | yes |
 | cssselect2 | 0.9.0 | BSD License | yes |
@@ -233,7 +233,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### brotli 1.2.0
+### brotli 1.2.1
 
 *LICENSE*
 
