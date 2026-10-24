@@ -73,7 +73,7 @@ uv run --no-sync python scripts/third_party_notices.py
 | markdown | 3.11.1 | BSD-3-Clause | yes |
 | markdown-it-py | 4.2.0 | MIT License | yes |
 | mdurl | 0.1.2 | MIT License | yes |
-| pillow | 12.3.0 | MIT-CMU | yes |
+| pillow | 13.0.0 | MIT-CMU | yes |
 | pyarrow | 26.0.0 | Apache-2.0 | yes |
 | pycparser | 3.0 | BSD-3-Clause | yes |
 | pydantic | 2.14.1 | MIT | yes |
@@ -1036,7 +1036,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 ```
 
-### pillow 12.3.0
+### pillow 13.0.0
 
 *LICENSE*
 
