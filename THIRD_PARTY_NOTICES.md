@@ -62,7 +62,7 @@ uv run --no-sync python scripts/third_party_notices.py
 | annotated-types | 0.8.0 | MIT | yes |
 | anyio | 4.14.2 | MIT | yes |
 | brotli | 1.2.1 | MIT | yes |
-| certifi | 2026.7.22 | Mozilla Public License 2.0 (MPL 2.0) ⚠️ | yes |
+| certifi | 2026.10.19 | Mozilla Public License 2.0 (MPL 2.0) ⚠️ | yes |
 | cffi | 2.1.1 | MIT-0 | yes |
 | cssselect2 | 0.9.0 | BSD License | yes |
 | fonttools | 4.63.0 | MIT | yes |
@@ -259,7 +259,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### certifi 2026.7.22
+### certifi 2026.10.19
 
 *LICENSE*
 
