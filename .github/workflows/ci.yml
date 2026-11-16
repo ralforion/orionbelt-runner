@@ -74,15 +74,20 @@ jobs:
         run: uv run --no-sync python scripts/third_party_notices.py --check
 
   # Both ends of the supported range: 3.12 is the floor in requires-python,
-  # 3.14 is what the Docker image ships. Keep the top of this matrix in step
+  # 3.15 is what the Docker image ships. Keep the top of this matrix in step
   # with the Dockerfile base image so base-image bumps verify themselves.
+  #
+  # 3.14, the previous image interpreter, stays because main's branch
+  # protection requires `test (3.14)` by name, while `test (3.15)` is not yet
+  # a required check. Drop 3.14 only together with that required-check entry:
+  # a required check that never reports leaves every PR blocked.
   test:
     needs: pins
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.12", "3.14"]
+        python: ["3.12", "3.14", "3.15"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
