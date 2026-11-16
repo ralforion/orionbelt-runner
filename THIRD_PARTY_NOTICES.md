@@ -70,14 +70,14 @@ uv run --no-sync python scripts/third_party_notices.py
 | httpcore | 1.0.9 | BSD-3-Clause | yes |
 | httpx | 0.28.1 | BSD License | yes |
 | idna | 3.19 | BSD-3-Clause | yes |
-| markdown | 3.11.2 | BSD-3-Clause | yes |
+| markdown | 3.11.3 | BSD-3-Clause | yes |
 | markdown-it-py | 4.2.0 | MIT License | yes |
 | mdurl | 0.1.2 | MIT License | yes |
 | pillow | 13.0.0 | MIT-CMU | yes |
-| pyarrow | 26.0.0 | Apache-2.0 | yes |
+| pyarrow | 26.0.1 | Apache-2.0 | yes |
 | pycparser | 3.0 | BSD-3-Clause | yes |
-| pydantic | 2.14.2 | MIT | yes |
-| pydantic-core | 2.50.2 | MIT | yes |
+| pydantic | 2.14.3 | MIT | yes |
+| pydantic-core | 2.50.4 | MIT | yes |
 | pydyf | 0.12.1 | BSD License | yes |
 | pygments | 2.21.0 | BSD-2-Clause | yes |
 | pyphen | 0.18.1 | GNU General Public License v2 or later (GPLv2+) OR GNU Lesser General Public License v2 or later (LGPLv2+) OR Mozilla Public License 1.1 (MPL 1.1) ⚠️ | yes |
@@ -87,7 +87,7 @@ uv run --no-sync python scripts/third_party_notices.py
 | structlog | 26.1.0 | MIT OR Apache-2.0 | yes |
 | tinycss2 | 1.5.1 | BSD License | yes |
 | tinyhtml5 | 2.1.0 | MIT License | yes |
-| typer | 0.27.3 | MIT | yes |
+| typer | 0.29.1 | MIT | yes |
 | typing-extensions | 4.16.0 | PSF-2.0 | yes |
 | typing-inspection | 0.4.4 | MIT | yes |
 | weasyprint | 70.0 | BSD License | yes |
@@ -891,7 +891,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### markdown 3.11.2
+### markdown 3.11.3
 
 *LICENSE.md*
 
@@ -2617,7 +2617,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### pyarrow 26.0.0
+### pyarrow 26.0.1
 
 *LICENSE.txt*
 
@@ -4833,7 +4833,7 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### pydantic 2.14.2
+### pydantic 2.14.3
 
 *LICENSE*
 
@@ -4861,7 +4861,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### pydantic-core 2.50.2
+### pydantic-core 2.50.4
 
 *LICENSE*
 
@@ -6785,7 +6785,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### typer 0.27.3
+### typer 0.29.1
 
 *LICENSE*
 
