@@ -3,7 +3,7 @@
 # ── Build stage ───────────────────────────────────────────────────────────────
 # Resolve dependencies and install the package into a self-contained venv with
 # uv. Kept separate from the runtime image so build tooling never ships.
-FROM python:3.14-slim AS build
+FROM python:3.15-slim AS build
 
 # uv: fast, reproducible installs. Copied from the official distroless image.
 # Pinned, not :latest — a floating uv would let the tool that installs uv.lock
@@ -45,7 +45,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable --extra arrow --extra pdf
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
-FROM python:3.14-slim AS runtime
+FROM python:3.15-slim AS runtime
 
 # WeasyPrint draws through Pango, which is a system library rather than a wheel —
 # the reason the pdf extra used to stay out of this image. Cairo and GDK-Pixbuf
