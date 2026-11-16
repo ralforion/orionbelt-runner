@@ -107,7 +107,7 @@ exist at the older tag.
 It verifies rather than regenerates `THIRD_PARTY_NOTICES.md`, exactly as CI does,
 so the release ships the file the repository was reviewed with and a tag pushed
 past a bypassed CI run fails instead of publishing a stale notice. The SBOM is
-resolved the way the Dockerfile resolves it (3.14, `--no-dev --extra arrow
+resolved the way the Dockerfile resolves it (3.15, `--no-dev --extra arrow
 --extra pdf`), because the resolved set is interpreter-dependent and an SBOM
 describing a dev environment would not describe the image anyone runs. Keep that
 step in step with the Dockerfile's `uv sync` line.

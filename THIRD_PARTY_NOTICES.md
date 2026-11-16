@@ -107,14 +107,14 @@ Tri-licensed GPL-2.0+/LGPL-2.1+/MPL-1.1, reached only through the `pdf` extra (W
 ## Platform layer (Docker image)
 
 `uv.lock` knows only PyPI packages, so the list above stops at the Python layer.
-The published image is built `FROM python:3.14-slim` and therefore also
+The published image is built `FROM python:3.15-slim` and therefore also
 redistributes a CPython interpreter and a Debian userland. Neither is vendored, patched, or
 rebuilt — the base image is used exactly as published.
 
 **CPython** is under the Python Software Foundation License Agreement, Version 2:
 permissive, no copyleft, nothing to elect. Its full text — including the
 historical BeOpen, CNRI and CWI terms that Python inherits — ships inside the
-image at `/usr/local/lib/python3.14/LICENSE.txt`. PSF-2.0 §3 would require a
+image at `/usr/local/lib/python3.15/LICENSE.txt`. PSF-2.0 §3 would require a
 summary of changes made to Python; this project makes none.
 
 **The Debian userland** is a mix of permissive, LGPL and GPL packages. Debian
